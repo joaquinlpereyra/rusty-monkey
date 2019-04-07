@@ -1,0 +1,12 @@
+[package]
+name = "monkey"
+version = "0.1.0"
+authors = ["joaquinlpereyra <joaquinlpereyra@gmail.com>"]
+edition = "2018"
+
+[[bin]]
+name = "monkey"
+docs = false
+
+[dependencies]
+text_io = "0.1.7"
