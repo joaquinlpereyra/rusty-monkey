@@ -91,9 +91,8 @@ impl<'a> Token<'a> {
 #[derive(Debug)]
 pub struct Lexer<'a> {
     input: &'a str,
-    position: usize,      // current position in input
-    read_position: usize, // position reading currently
-    ch: Option<char>,     // the char we are reading currently
+    position: usize,  // current position in input
+    ch: Option<char>, // the char we are reading currently
 }
 
 // TODO: support unicode, with emojis and all!
@@ -107,14 +106,11 @@ impl<'a> Lexer<'a> {
     /// assert_eq!(tokens.len(), 5);
     /// ```
     pub fn new(input: &'a str) -> Lexer<'a> {
-        let mut l = Lexer {
+        Lexer {
             input,
             position: 0,
-            read_position: 0,
-            ch: None,
-        };
-        l.read_char();
-        l
+            ch: input.chars().nth(0),
+        }
     }
 
     /// Get the next_token from the Lexer.
@@ -191,13 +187,12 @@ impl<'a> Lexer<'a> {
     }
 
     fn peak_char(&mut self) -> Option<char> {
-        self.input.chars().nth(self.read_position)
+        self.input.chars().nth(self.position + 1)
     }
 
     fn read_char(&mut self) {
-        self.ch = self.input.chars().nth(self.read_position);
-        self.position = self.read_position;
-        self.read_position += 1;
+        self.ch = self.peak_char();
+        self.position += 1;
     }
 
     fn is_delimiter(c: char) -> bool {
@@ -208,6 +203,12 @@ impl<'a> Lexer<'a> {
             || c == '}'
             || c == '{'
             || c == ','
+            || c == '='
+            || c == '!'
+            || c == '*'
+            || c == '+'
+            || c == '-'
+            || c == '/'
             || c.is_whitespace();
     }
 
@@ -218,11 +219,10 @@ impl<'a> Lexer<'a> {
         }
 
         let end_word = self.position;
-        // readjust read_position and position to the character
+        // readjust position to the character
         // last character of the word, so we can just call .next()
         // and get the inmediate next token
-        if self.read_position > 0 && self.position > 0 {
-            self.read_position -= 1;
+        if self.position > 0 {
             self.position -= 1;
         }
 
