@@ -140,22 +140,15 @@ impl<'a> Lexer<'a> {
             return Token::EOF;
         }
         let maybe_token = match self.ch.unwrap() {
-            '=' => {
-                if self.peak_char() == Some('=') {
-                    self.read_char();
-                    Token::EQ
-                } else {
-                    Token::Assign
-                }
+            '=' if self.peak_char() == Some('=') => {
+                self.read_char();
+                Token::EQ
             }
-            '!' => {
-                if self.peak_char() == Some('=') {
-                    self.read_char();
-                    Token::NotEQ
-                } else {
-                    Token::Not
-                }
+            '!' if self.peak_char() == Some('=') => {
+                self.read_char();
+                Token::NotEQ
             }
+            '!' => Token::Not,
             '=' => Token::Assign,
             '+' => Token::Plus,
             ';' => Token::Semicolon,
@@ -186,7 +179,7 @@ impl<'a> Lexer<'a> {
         maybe_token
     }
 
-    fn peak_char(&mut self) -> Option<char> {
+    fn peak_char(&self) -> Option<char> {
         self.input.chars().nth(self.position + 1)
     }
 
