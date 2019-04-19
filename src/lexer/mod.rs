@@ -9,9 +9,10 @@
 //! let tokens = program.into_iter().collect::<Vec<Token>>();
 //! assert_eq!(tokens, vec![Let, Ident("answer"), Assign, Int("42"), Semicolon]);
 //! ```
+use std::fmt;
 
 /// Describes all the tokens for Monkey
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token<'a> {
     // Special tokens
     Illegal(&'a str),
@@ -51,9 +52,9 @@ pub enum Token<'a> {
     Return,
 }
 
-impl<'a> Token<'a> {
-    fn to_string(&self) -> &str {
-        match self {
+impl<'a> fmt::Display for Token<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let string = match self {
             Token::Illegal(s) => s,
             Token::EOF => "EOF",
             Token::Ident(s) => s,
@@ -81,7 +82,8 @@ impl<'a> Token<'a> {
             Token::If => "if",
             Token::Else => "else",
             Token::Return => "return",
-        }
+        };
+        write!(f, "{}", string)
     }
 }
 
@@ -139,7 +141,7 @@ impl<'a> Lexer<'a> {
         if self.ch.is_none() {
             return Token::EOF;
         }
-        let maybe_token = match self.ch.unwrap() {
+        let token = match self.ch.unwrap() {
             '=' if self.peak_char() == Some('=') => {
                 self.read_char();
                 Token::EQ
@@ -176,7 +178,7 @@ impl<'a> Lexer<'a> {
             },
         };
         self.read_char();
-        maybe_token
+        token
     }
 
     fn peak_char(&self) -> Option<char> {
