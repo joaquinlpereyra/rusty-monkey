@@ -22,7 +22,7 @@ impl<'a> fmt::Display for Expression<'a> {
             Expression::Integer(n) => n.int.to_string(),
             Expression::Prefix(n) => format!("{}{}", n.op, *n.expr),
             Expression::IfElse(n) => format!(
-                "IF {} THEN {} ELSE {}",
+                "IF {} THEN {}\nELSE {}",
                 n.condition,
                 n.then,
                 match &n.alternative {

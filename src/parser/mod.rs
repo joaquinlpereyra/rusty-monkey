@@ -241,10 +241,14 @@ impl<'a> Parser<'a> {
             Token::RParen => {}
             t => return Err(ParserError::new(&Token::RParen, &t)),
         }
+        println!("parsing then, cur token: {}", self.current_token);
         let then = Box::new(self.parse_block_stmt()?);
+        println!("parsing alternative, cur token: {}", self.current_token);
         let alternative = match self.peek_token {
             Token::Else => {
                 // skip to else token
+                self.next_token();
+                // skip to {
                 self.next_token();
                 Some(Box::new(self.parse_block_stmt()?))
             }
@@ -667,6 +671,7 @@ foobar
         }
     }
 
+    #[test]
     fn test_if_else_expression_with_alternative() {
         let mut p = make_parser("if (x < y) {x} else {y}");
         let program = p.parse_program().unwrap();
@@ -675,13 +680,12 @@ foobar
             if let ast::Expression::IfElse(_) = &n.expr {
                 assert_eq!(
                     program.to_string(),
-                    "IF ((x) < (y)) THEN {
-\t x
+                    "(IF (x) < (y) THEN {
+\t (x)
 }
 ELSE {
-\t y
-}
-"
+\t (y)
+})"
                 );
             } else {
                 panic!("expected if else expression")
