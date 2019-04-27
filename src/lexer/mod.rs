@@ -72,7 +72,7 @@ impl<'a> fmt::Display for Token<'a> {
             Token::Comma => ",",
             Token::Semicolon => ";",
             Token::LParen => "(",
-            Token::RParen => "(",
+            Token::RParen => ")",
             Token::LBrace => "{",
             Token::RBrace => "}",
             Token::Fn => "fn",
