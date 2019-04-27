@@ -232,12 +232,9 @@ impl<'a> Parser<'a> {
         let condition = Box::new(self.parse_expression(OperatorPrecedence::Lowest)?);
         self.checked_skip(Token::RParen)?;
         let then = Box::new(self.parse_block_stmt()?);
-        println!("parsing alternative, cur token: {}", self.current_token);
         let alternative = match self.peek_token {
             Token::Else => {
-                // skip to else!
-                self.next_token();
-                // now skip the else itself.
+                self.checked_skip(Token::RBrace)?;
                 self.checked_skip(Token::Else)?;
                 Some(Box::new(self.parse_block_stmt()?))
             }
