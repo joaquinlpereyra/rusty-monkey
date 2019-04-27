@@ -12,6 +12,7 @@ pub enum Expression<'a> {
     Binary(BinaryNode<'a>),
     Boolean(BooleanNode<'a>),
     IfElse(IfElseNode<'a>),
+    Fn(FnNode<'a>),
 }
 
 impl<'a> fmt::Display for Expression<'a> {
@@ -21,6 +22,16 @@ impl<'a> fmt::Display for Expression<'a> {
             Expression::Boolean(n) => n.token.to_string(),
             Expression::Integer(n) => n.int.to_string(),
             Expression::Prefix(n) => format!("{}{}", n.op, *n.expr),
+            Expression::Fn(n) => format!(
+                "fn {} ({}) {}",
+                n.token,
+                n.params
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", "),
+                n.body,
+            ),
             Expression::IfElse(n) => format!(
                 "IF {} THEN {}\nELSE {}",
                 n.condition,
@@ -154,4 +165,11 @@ pub struct IfElseNode<'a> {
 pub struct BlockNode<'a> {
     pub token: Token<'a>,
     pub stmts: Vec<Statement<'a>>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct FnNode<'a> {
+    pub token: Token<'a>,
+    pub params: Vec<Expression<'a>>,
+    pub body: Box<Statement<'a>>,
 }

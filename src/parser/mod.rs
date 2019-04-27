@@ -111,7 +111,7 @@ impl<'a> Parser<'a> {
     }
 
     fn checked_skip(&mut self, expected: Token) -> Result<()> {
-        if self.peek_token == expected {
+        if self.current_token == expected {
             self.next_token();
             Ok(())
         } else {
@@ -159,7 +159,7 @@ impl<'a> Parser<'a> {
 
     // Parses the expression at the current token.
     // Takes the precedence of the last scanned token as argument.
-    // As default, you shoul pass OperatorPrecedence::Lowest,
+    // As default, you should pass OperatorPrecedence::Lowest,
     // so any actual precedence takes over.
     fn parse_expression(&mut self, prec: OperatorPrecedence) -> Result<ast::Expression<'a>> {
         let mut expr = self.prefix_parse()?;
@@ -181,10 +181,8 @@ impl<'a> Parser<'a> {
             Token::Not | Token::Plus | Token::Minus => self.parse_prefix_op(),
             Token::LParen => self.parse_paren_group(),
             Token::If => self.parse_if_expression(),
-            // expressions can only start with identifiers,
-            // integers, nots, plus or minus!
             t => Err(ParserError::new_from_strings(
-                "+, !, -, ( or an identifier or literal".to_string(),
+                "+, !, -, (, if, or an identifier or literal".to_string(),
                 t.to_string(),
             )),
         }
@@ -230,26 +228,17 @@ impl<'a> Parser<'a> {
     // ^
     fn parse_if_expression(&mut self) -> Result<ast::Expression<'a>> {
         let token = self.next_token();
-        // skip the (
-        match self.next_token() {
-            Token::LParen => {}
-            t => return Err(ParserError::new(&Token::RParen, &t)),
-        }
+        self.checked_skip(Token::LParen)?;
         let condition = Box::new(self.parse_expression(OperatorPrecedence::Lowest)?);
-        // skip the )
-        match self.next_token() {
-            Token::RParen => {}
-            t => return Err(ParserError::new(&Token::RParen, &t)),
-        }
-        println!("parsing then, cur token: {}", self.current_token);
+        self.checked_skip(Token::RParen)?;
         let then = Box::new(self.parse_block_stmt()?);
         println!("parsing alternative, cur token: {}", self.current_token);
         let alternative = match self.peek_token {
             Token::Else => {
-                // skip to else token
+                // skip to else!
                 self.next_token();
-                // skip to {
-                self.next_token();
+                // now skip the else itself.
+                self.checked_skip(Token::Else)?;
                 Some(Box::new(self.parse_block_stmt()?))
             }
             _ => None,
@@ -270,17 +259,16 @@ impl<'a> Parser<'a> {
     // ^       $
     // BEGIN   END
     fn parse_block_stmt(&mut self) -> Result<ast::Statement<'a>> {
-        // next token should be {, skip it
-        let token = match self.next_token() {
-            Token::LBrace => Token::LBrace,
-            t => return Err(ParserError::new(&Token::LBrace, &t)),
-        };
+        self.checked_skip(Token::LBrace)?;
         let mut stmts = Vec::new();
         while self.current_token != Token::RBrace {
             let stmt = self.parse_statement()?;
             stmts.push(stmt);
         }
-        Ok(ast::Statement::Block(ast::BlockNode { token, stmts }))
+        Ok(ast::Statement::Block(ast::BlockNode {
+            token: Token::LBrace,
+            stmts,
+        }))
     }
 
     // Parses an identifier.
@@ -295,8 +283,7 @@ impl<'a> Parser<'a> {
     // (2 + 3)
     // ^
     fn parse_paren_group(&mut self) -> Result<ast::Expression<'a>> {
-        // skip the (
-        self.next_token();
+        self.checked_skip(Token::LParen)?;
         let expr = self.parse_expression(OperatorPrecedence::Lowest);
         if self.next_token() != Token::RParen {
             return Err(ParserError::new(&Token::RParen, &self.peek_token));
