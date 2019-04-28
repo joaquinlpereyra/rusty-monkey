@@ -78,7 +78,7 @@ pub enum Statement<'a> {
 impl<'a> fmt::Display for Statement<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self {
-            Statement::Let(n) => format!("LET {}", n.token),
+            Statement::Let(n) => format!("LET {} = {}", n.name, n.value),
             Statement::Return(n) => format!("RET {}", n.value),
             Statement::Expression(n) => format!("({})", n.expr),
             Statement::Block(n) => format!(

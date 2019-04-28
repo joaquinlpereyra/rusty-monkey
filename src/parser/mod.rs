@@ -8,6 +8,9 @@ use std::convert::From;
 use std::error::Error;
 use std::{fmt, mem, result};
 
+// I would use this to learn how to make a parser.
+// Just saying.
+
 // Silly result alias.
 type Result<T> = result::Result<T, Box<ParserError>>;
 
@@ -45,6 +48,7 @@ fn precedence<'a>(t: &Token<'a>) -> OperatorPrecedence {
         Token::Plus | Token::Minus => OperatorPrecedence::Sum,
         Token::EQ | Token::NotEQ => OperatorPrecedence::Equals,
         Token::GT | Token::LT => OperatorPrecedence::LessOrGreater,
+        Token::LParen => OperatorPrecedence::Call,
         _ => OperatorPrecedence::Lowest,
     }
 }
@@ -52,7 +56,7 @@ fn precedence<'a>(t: &Token<'a>) -> OperatorPrecedence {
 // ParserError is the error returned by the parser
 // when it encounters an unexpected token.
 #[derive(Debug)]
-struct ParserError {
+pub struct ParserError {
     expected: String,
     got: String,
 }
@@ -68,6 +72,10 @@ impl<'a> ParserError {
     fn new_from_strings(expected: String, got: String) -> Box<ParserError> {
         Box::new(ParserError { expected, got })
     }
+
+    fn new_with_expression(expected: &Token<'a>, got: &ast::Expression<'a>) -> Box<ParserError> {
+        ParserError::new_from_strings(expected.to_string(), got.to_string())
+    }
 }
 
 impl fmt::Display for ParserError {
@@ -81,7 +89,7 @@ impl Error for ParserError {}
 /// The parser is responsible
 /// from translating from a series
 /// of tokens to actual ASTs nodes.
-struct Parser<'a> {
+pub struct Parser<'a> {
     lexer: lexer::Lexer<'a>,
     current_token: Token<'a>,
     peek_token: Token<'a>,
@@ -110,6 +118,8 @@ impl<'a> Parser<'a> {
         mem::replace(&mut self.current_token, next)
     }
 
+    // Skips the current token if it matched with the expected one,
+    // if not, it will produce an error.
     fn checked_skip(&mut self, expected: Token) -> Result<()> {
         if self.current_token == expected {
             self.next_token();
@@ -119,15 +129,12 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Skips the current token if it matches what is provided in the
+    // is parameter.
     fn skip_if(&mut self, is: Token) {
         if self.current_token == is {
             self.next_token();
         }
-    }
-
-    // Returns the OperatorPrecedence for the current token.
-    fn peek_token_precedence(&self) -> OperatorPrecedence {
-        precedence(&self.peek_token)
     }
 
     // Returns the OperatorPrecedence for the current token.
@@ -209,8 +216,9 @@ impl<'a> Parser<'a> {
             | Token::NotEQ
             | Token::LT
             | Token::GT => self.parse_infix_expr(lhs),
+            Token::LParen if lhs.is_some() => self.parse_fn_call(lhs.unwrap()),
             t => Err(ParserError::new_from_strings(
-                "+, -, /, *, ==, !=, <, >".to_string(),
+                "+, -, /, *, ==, !=, <, >, or a function call".to_string(),
                 t.to_string(),
             )),
         }
@@ -229,11 +237,24 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
+    // Parses a call to a function. Will start at function name and finish at last parenthesis.
+    // let x = add(2 + 3);
+    //         ^          $
+    fn parse_fn_call(&mut self, fun: Box<ast::Expression<'a>>) -> Result<ast::Expression<'a>> {
+        let token = self.next_token();
+        let args = self.parse_fn_args()?;
+        Ok(ast::Expression::FnCall(ast::FnCallNode {
+            token,
+            fun,
+            args,
+        }))
+    }
+
     // Parse an if expression.
     // Current token should be positioned at the beginning IF keyword.
     // The current token will be the rightmost } at the end of the function.
     // IF ( condition ) { expr } else { expr }
-    // ^                                    $
+    // ^                                     $
     // Else clause is optional!
     // IF ( condition ) { expr }
     // ^                       $
@@ -267,8 +288,23 @@ impl<'a> Parser<'a> {
         self.checked_skip(Token::Fn)?;
         self.checked_skip(Token::LParen)?;
         let params = self.parse_fn_args()?;
-        self.checked_skip(Token::RParen)?;
+
+        // check if someome is triying to define
+        // a function with an expression as arguments
+        let is_literal = |arg: &&ast::Expression| match arg {
+            ast::Expression::Literal(_) => true,
+            _ => false,
+        };
+        if let Some(param) = params.iter().find(|param| !is_literal(param)) {
+            return Err(ParserError::new_with_expression(
+                &Token::Ident("identifier"),
+                &param,
+            ));
+        }
+
         let body = Box::new(self.parse_block_stmt()?);
+        self.skip_if(Token::RBrace);
+        self.skip_if(Token::Semicolon);
         Ok(ast::Expression::Fn(ast::FnNode {
             token: Token::Fn,
             params,
@@ -276,22 +312,26 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    // Parses a function arguments.
+    // Current token must be the first argument, and it will end outside
+    // the last parenthesis.
+    // fn(x, y, z) { something }
+    //    ^        $
     fn parse_fn_args(&mut self) -> Result<Vec<ast::Expression<'a>>> {
         let mut args = Vec::new();
         // no arguments for this function
-        if let Token::RParen = self.peek_token {
+        if let Token::RParen = self.current_token {
             return Ok(args);
         }
-        while self.peek_token == Token::Comma {
-            let arg = self.next_token();
+        // surely there is at least one argument...
+        args.push(self.parse_expression(OperatorPrecedence::Lowest)?);
+        // and continue on with the rest...
+        while self.current_token == Token::Comma {
             self.checked_skip(Token::Comma)?;
-            let ident = ast::Expression::Literal(ast::LiteralNode { token: arg });
-            args.push(ident);
+            let arg = self.parse_expression(OperatorPrecedence::Lowest)?;
+            args.push(arg);
         }
-        // last argument is missed in the while loop!
-        args.push(ast::Expression::Literal(ast::LiteralNode {
-            token: self.next_token(),
-        }));
+        self.checked_skip(Token::RParen)?;
         Ok(args)
     }
 
@@ -344,21 +384,18 @@ impl<'a> Parser<'a> {
 
     // Parses a boolean expression
     fn parse_bool(&mut self) -> Result<ast::Expression<'a>> {
-        let bool_token = self.next_token();
-        let bool_value = match bool_token {
+        let token = self.next_token();
+        let value = match token {
             Token::True => true,
             Token::False => false,
             _ => {
                 return Err(ParserError::new_from_strings(
                     format!("{} | {}", Token::True, Token::False),
-                    bool_token.to_string(),
+                    token.to_string(),
                 ))
             }
         };
-        Ok(ast::Expression::Boolean(ast::BooleanNode {
-            token: bool_token,
-            value: bool_value,
-        }))
+        Ok(ast::Expression::Boolean(ast::BooleanNode { token, value }))
     }
 
     // Parses a prefix operation.
@@ -401,23 +438,17 @@ impl<'a> Parser<'a> {
         return Ok(ast::ExpressionStatementNode { token, expr });
     }
 
-    // Parses a return statements, which sould start at the next token
+    // Parses a return statement. The current token should be
+    // the return keyword.
     fn parse_return_stmt(&mut self) -> Result<ast::ReturnNode<'a>> {
-        let return_token = self.next_token();
-
-        // for now, ignore the RHS of the return statement
-        while self.current_token != Token::Semicolon {
-            self.next_token();
-        }
-        Ok(ast::ReturnNode {
-            token: return_token,
-            value: ast::Expression::Literal(ast::LiteralNode {
-                token: Token::Int("10"),
-            }),
-        })
+        let token = self.next_token();
+        let value = self.parse_expression(OperatorPrecedence::Lowest)?;
+        Ok(ast::ReturnNode { token, value })
     }
 
-    // Parses a let statement, which should start at the next token.
+    // Parses a let statement, which should start at the current token.
+    // let x = 2;
+    // ^
     fn parse_let_stmt(&mut self) -> Result<ast::LetNode<'a>> {
         let let_token = self.next_token();
 
@@ -428,25 +459,13 @@ impl<'a> Parser<'a> {
         }
 
         let ident_token = self.next_token();
-
-        // if the current token is not now an assign, wrong syntax!
-        match &self.current_token {
-            Token::Assign => {}
-            t => return Err(ParserError::new(&Token::Assign, &t)),
-        }
-
-        // for now, ignore the RHS of the let statement
-        while self.current_token != Token::Semicolon {
-            self.next_token();
-        }
+        self.checked_skip(Token::Assign)?;
+        let value = self.parse_expression(OperatorPrecedence::Lowest)?;
 
         return Ok(ast::LetNode {
             token: let_token,
             name: ident_token.to_string(),
-            // TODO: clearly hardcoding expression
-            value: ast::Expression::Literal(ast::LiteralNode {
-                token: lexer::Token::Int("5"),
-            }),
+            value,
         });
     }
 }
@@ -473,7 +492,7 @@ mod tests {
         let mut p = make_parser(
             "
 let x = 5;
-let y = 10;
+let y = 10 + 3;
 let foobar = 838383;
 ",
         );
@@ -492,8 +511,16 @@ let foobar = 838383;
             ast::LetNode {
                 token: Token::Let,
                 name: "y".to_string(),
-                value: ast::Expression::Literal(ast::LiteralNode {
-                    token: Token::Int("10"),
+                value: ast::Expression::Binary(ast::BinaryNode {
+                    op: Token::Plus,
+                    lhs: Some(Box::new(ast::Expression::Integer(ast::IntegerNode {
+                        token: Token::Int("10"),
+                        int: 10,
+                    }))),
+                    rhs: Some(Box::new(ast::Expression::Integer(ast::IntegerNode {
+                        token: Token::Int("3"),
+                        int: 3,
+                    }))),
                 }),
             },
             ast::LetNode {
@@ -533,9 +560,17 @@ return 10;
 return add(15);
 ",
         );
-        let program = p.parse_program();
-        assert!(program.is_ok());
-        assert_eq!(program.unwrap().statements.len(), 3);
+        let program = p.parse_program().unwrap();
+        assert_eq!(program.statements.len(), 3);
+        match program.statements.get(0).unwrap() {
+            ast::Statement::Return(n) => match &n.value {
+                ast::Expression::Integer(n) => {
+                    assert_eq!(n.int, 5);
+                }
+                _ => panic!("expected int!"),
+            },
+            _ => panic!("expected return stmt!"),
+        };
     }
 
     #[test]
@@ -759,10 +794,15 @@ ELSE {
 
     #[test]
     fn test_fn_call() {
-        let mut p = make_parser("add(1, 2 * 3, 4 + 5)");
+        let mut p = make_parser("add(1, 2 * 3, 4 + 5);");
         let program = p.parse_program().unwrap();
         assert_eq!(program.statements.len(), 1);
         let stmt = &program.statements[0];
-        assert_eq!(stmt.to_string(), "add(1)")
+        assert_eq!(
+            stmt.to_string(),
+            "(add(1
+(2) * (3)
+(4) + (5)))"
+        )
     }
 }
