@@ -260,9 +260,9 @@ impl<'a> Parser<'a> {
         let condition = Box::new(self.parse_expression(OperatorPrecedence::Lowest)?);
         self.checked_skip(Token::RParen)?;
         let then = Box::new(self.parse_block_stmt()?);
-        let alternative = match self.peek_token {
+        self.checked_skip(Token::RBrace)?;
+        let alternative = match self.current_token {
             Token::Else => {
-                self.checked_skip(Token::RBrace)?;
                 self.checked_skip(Token::Else)?;
                 Some(Box::new(self.parse_block_stmt()?))
             }
@@ -709,6 +709,22 @@ foobar
                 _ => panic!("everything should be a expression stmt!"),
             }
         }
+    }
+
+    #[test]
+    fn test_nested_if_else_expression() {
+        let mut p = make_parser(
+            "
+if (10 > 1) {
+    if (10 > 1) {
+        return 4;
+    }
+   return 5;
+}
+return 6;
+",
+        );
+        let program = p.parse_program().unwrap();
     }
 
     #[test]
