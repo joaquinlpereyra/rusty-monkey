@@ -50,18 +50,9 @@ impl<'a> fmt::Display for Expression<'a> {
                     None => "".to_string(),
                 }
             ),
-            Expression::Binary(n) => format!(
-                "({}) {} ({})",
-                match &n.lhs {
-                    Some(expr) => expr.to_string(),
-                    None => "".to_string(),
-                },
-                n.op,
-                match &n.rhs {
-                    Some(expr) => expr.to_string(),
-                    None => "".to_string(),
-                },
-            ),
+            Expression::Binary(n) => {
+                format!("({}) {} ({})", &n.lhs.to_string(), n.op, &n.rhs.to_string(),)
+            }
         };
         write!(f, "{}", s)
     }
@@ -152,8 +143,8 @@ pub struct PrefixNode<'a> {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct BinaryNode<'a> {
     pub op: Token<'a>,
-    pub lhs: Option<Box<Expression<'a>>>,
-    pub rhs: Option<Box<Expression<'a>>>,
+    pub lhs: Box<Expression<'a>>,
+    pub rhs: Box<Expression<'a>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

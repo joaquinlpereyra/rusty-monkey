@@ -3,20 +3,16 @@
 //! which constructs AST nodes
 //! given a lexer.
 use super::lexer::{self, Token};
-mod ast;
+pub mod ast;
 use std::convert::From;
 use std::error::Error;
 use std::{fmt, mem, result};
 
-// I would use this to learn how to make a parser.
+// I would **NOT** use this to learn how to make a parser.
 // Just saying.
 
 // Silly result alias.
 type Result<T> = result::Result<T, Box<ParserError>>;
-
-// Represents an optional expression.
-// Useful for binary expressions.
-type MaybeExpr<'a> = Option<Box<ast::Expression<'a>>>;
 
 enum OperatorPrecedence {
     Lowest,
@@ -179,7 +175,7 @@ impl<'a> Parser<'a> {
         let prev_precedence: i8 = prec.into();
         let mut current_token_precedence = self.current_token_precedence().into();
         while self.current_token != Token::Semicolon && prev_precedence < current_token_precedence {
-            expr = self.infix_parse(Some(Box::new(expr)))?;
+            expr = self.infix_parse(Box::new(expr))?;
             current_token_precedence = self.current_token_precedence().into();
         }
         Ok(expr)
@@ -206,7 +202,7 @@ impl<'a> Parser<'a> {
     // Takes an optional pointer to a Left Hand Side expression.
     // If given, this will return the LHS joined with the RHS
     // Produces an error if the current token is not valid.
-    fn infix_parse(&mut self, lhs: MaybeExpr<'a>) -> Result<ast::Expression<'a>> {
+    fn infix_parse(&mut self, lhs: Box<ast::Expression<'a>>) -> Result<ast::Expression<'a>> {
         match &self.current_token {
             Token::Plus
             | Token::Minus
@@ -216,7 +212,7 @@ impl<'a> Parser<'a> {
             | Token::NotEQ
             | Token::LT
             | Token::GT => self.parse_infix_expr(lhs),
-            Token::LParen if lhs.is_some() => self.parse_fn_call(lhs.unwrap()),
+            Token::LParen => self.parse_fn_call(lhs),
             t => Err(ParserError::new_from_strings(
                 "+, -, /, *, ==, !=, <, >, or a function call".to_string(),
                 t.to_string(),
@@ -226,11 +222,11 @@ impl<'a> Parser<'a> {
 
     // Parses an infix expression, withouth checking if the current token is
     // a valid one.
-    fn parse_infix_expr(&mut self, lhs: MaybeExpr<'a>) -> Result<ast::Expression<'a>> {
+    fn parse_infix_expr(&mut self, lhs: Box<ast::Expression<'a>>) -> Result<ast::Expression<'a>> {
         let precedence = self.current_token_precedence();
         let op = self.next_token();
         let rhs = match self.parse_expression(precedence) {
-            Ok(expr) => Some(Box::new(expr)),
+            Ok(expr) => Box::new(expr),
             e => return e,
         };
         let expr = ast::Expression::Binary(ast::BinaryNode { op, lhs, rhs });
@@ -513,14 +509,14 @@ let foobar = 838383;
                 name: "y".to_string(),
                 value: ast::Expression::Binary(ast::BinaryNode {
                     op: Token::Plus,
-                    lhs: Some(Box::new(ast::Expression::Integer(ast::IntegerNode {
+                    lhs: Box::new(ast::Expression::Integer(ast::IntegerNode {
                         token: Token::Int("10"),
                         int: 10,
-                    }))),
-                    rhs: Some(Box::new(ast::Expression::Integer(ast::IntegerNode {
+                    })),
+                    rhs: Box::new(ast::Expression::Integer(ast::IntegerNode {
                         token: Token::Int("3"),
                         int: 3,
-                    }))),
+                    })),
                 }),
             },
             ast::LetNode {
@@ -659,19 +655,13 @@ foobar
                 ast::Statement::Expression(node) => match node.expr {
                     ast::Expression::Binary(n) => {
                         assert_eq!(n.op.to_string(), expected.op);
-                        match n.lhs {
-                            Some(boxed) => match *boxed {
-                                ast::Expression::Integer(n) => assert_eq!(n.int, expected.lhs),
-                                _ => panic!("lhs is not an int!"),
-                            },
-                            _ => panic!("no lhs!"),
-                        }
-                        match n.rhs {
-                            Some(boxed) => match *boxed {
-                                ast::Expression::Integer(n) => assert_eq!(n.int, expected.rhs),
-                                _ => panic!("rhs is not an int!"),
-                            },
-                            _ => panic!("no rhs!"),
+                        match *n.lhs {
+                            ast::Expression::Integer(n) => assert_eq!(n.int, expected.lhs),
+                            _ => panic!("lhs is not an int!"),
+                        };
+                        match *n.rhs {
+                            ast::Expression::Integer(n) => assert_eq!(n.int, expected.rhs),
+                            _ => panic!("rhs is not an int!"),
                         }
                     }
                     expr => panic!(

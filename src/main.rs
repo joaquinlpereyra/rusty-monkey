@@ -1,8 +1,9 @@
 #[macro_use]
 extern crate text_io;
 extern crate monkey;
+use monkey::interpreter;
 use monkey::lexer::{Lexer, Token};
-use monkey::parser::{Parser, ParserError};
+use monkey::parser::Parser;
 use std::io::{self, Write};
 
 fn main() {
@@ -13,10 +14,15 @@ fn main() {
         let l = Lexer::new(&line);
         println!("tokens: {:?}", l.into_iter().collect::<Vec<Token>>());
         let l = Lexer::new(&line);
-        let p = Parser::new(l).parse_program();
-        match p {
-            Ok(program) => println!("parsed: {}", program),
-            Err(e) => println!("parsed: {}", e),
+        let p = match Parser::new(l).parse_program() {
+            Ok(program) => program,
+            Err(e) => {
+                println!("error: {}", e);
+                break;
+            }
         };
+        println!("parsed: {}", p);
+        let interpreted = interpreter::eval(&p);
+        println!("interpreted: {}", interpreted);
     }
 }
