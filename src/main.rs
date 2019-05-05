@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate text_io;
 extern crate monkey;
-use monkey::interpreter;
+use monkey::interpreter::Interpreter;
 use monkey::lexer::{Lexer, Token};
 use monkey::parser::Parser;
 use std::io::{self, Write};
@@ -22,7 +22,7 @@ fn main() {
             }
         };
         println!("parsed: {}", p);
-        let interpreted = interpreter::eval(&p);
+        let interpreted = Interpreter::new().eval(&p);
         println!("interpreted: {}", interpreted);
     }
 }

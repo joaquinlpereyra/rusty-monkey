@@ -4,6 +4,7 @@
 //! AST nodes can be found in monkey::parser::ast
 use super::lexer::Token;
 use super::parser::ast;
+use std::collections::HashMap;
 use std::fmt;
 
 const NULL: Object = Object::Null;
@@ -12,12 +13,53 @@ const FALSE: Object = Object::Boolean { value: false };
 
 // An object represents every construct on the Monkey language.
 // Most objects represent a single value.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Object {
     Boolean { value: bool },
     Integer { value: i64 },
     Return { value: Box<Object> },
+    Error { msg: String },
     Null,
+}
+
+fn err_type_mismatch<'a>(lhs: &Object, op: &Token<'a>, rhs: &Object) -> Object {
+    Object::Error {
+        msg: format!(
+            "type mismatch: {} {} {}",
+            lhs.type_str(),
+            op,
+            rhs.type_str()
+        ),
+    }
+}
+
+fn err_unknown_op<'a>(lhs: &Object, op: &Token<'a>, rhs: &Object) -> Object {
+    Object::Error {
+        msg: format!(
+            "unknown operator: {} {} {}",
+            lhs.type_str(),
+            op,
+            rhs.type_str()
+        ),
+    }
+}
+
+fn err_identifier_not_found<'a>(ident: &Token<'a>) -> Object {
+    Object::Error {
+        msg: format!("identifier not found: {}", ident),
+    }
+}
+
+impl Object {
+    fn type_str(&self) -> &str {
+        match self {
+            Object::Boolean { value: _ } => "BOOLEAN",
+            Object::Integer { value: _ } => "INTEGER",
+            Object::Return { value: _ } => "RETURN",
+            Object::Error { msg: _ } => "ERR",
+            Object::Null => "NULL",
+        }
+    }
 }
 
 impl fmt::Display for Object {
@@ -26,6 +68,7 @@ impl fmt::Display for Object {
             Object::Boolean { value } => format!("{}", value),
             Object::Integer { value } => format!("{}", value),
             Object::Return { value } => format! {"return {}", value},
+            Object::Error { msg } => format!("{}", msg),
             Object::Null => "null".to_string(),
         };
         write!(f, "{}", s)
@@ -37,91 +80,159 @@ impl fmt::Display for Object {
 /// ```
 /// use monkey::lexer::Lexer;
 /// use monkey::parser::Parser;
-/// use monkey::interpreter::{self, Object};
+/// use monkey::interpreter::{Interpreter, Object};
 /// let tokens = Lexer::new("5;");
 /// let ast = Parser::new(tokens).parse_program().unwrap();
-/// let result = interpreter::eval(&ast);
+/// let result = Interpreter::new().eval(&ast);
 /// assert_eq!(result, Object::Integer{value: 5});
 /// ```
-pub fn eval(program: &ast::Program) -> Object {
-    eval_stmts(&program.statements)
+pub struct Interpreter<'a> {
+    store: HashMap<&'a str, Object>,
 }
 
-fn eval_stmts(stmts: &Vec<ast::Statement>) -> Object {
-    stmts.iter().map(eval_stmt).last().unwrap_or(NULL)
-}
-
-fn eval_stmt(stmt: &ast::Statement) -> Object {
-    match stmt {
-        ast::Statement::Expression(node) => eval_expr(&node.expr),
-        ast::Statement::Block(node) => eval_stmts(&node.stmts),
-        t => unimplemented!("{}", t.to_string()),
+impl<'a> Interpreter<'a> {
+    pub fn new() -> Interpreter<'a> {
+        Interpreter {
+            store: HashMap::new(),
+        }
     }
-}
 
-fn eval_expr(expr: &ast::Expression) -> Object {
-    match expr {
-        ast::Expression::Integer(node) => Object::Integer { value: node.int },
-        ast::Expression::Boolean(node) if node.value => TRUE,
-        ast::Expression::Boolean(_) => FALSE,
-        ast::Expression::Prefix(node) => eval_prefix_expr(&node.op, eval_expr(&node.expr)),
-        ast::Expression::IfElse(node) => {
-            match (truthy(eval_expr(&node.condition)), &node.alternative) {
-                (true, _) => eval_stmt(&node.then),
-                (false, Some(stmt)) => eval_stmt(&stmt),
-                (false, None) => NULL,
+    fn get_identifier(&mut self, ident: &Token<'a>) -> Option<Object> {
+        let name = match ident {
+            Token::Ident(s) => s,
+            _ => unreachable!("calling get_identifier on non ident token: {}", ident),
+        };
+        dbg!(&self.store);
+        match self.store.get(name) {
+            Some(obj) => Some(obj.clone()),
+            None => None,
+        }
+    }
+
+    fn set_identifier(&mut self, ident: &'a str, obj: Object) {
+        dbg!(ident);
+        self.store.insert(ident, obj);
+    }
+
+    // Evaluates a program, consuming the interpreter.
+    pub fn eval(self, program: &'a ast::Program) -> Object {
+        let mut s = self;
+        match s.eval_stmts(&program.statements) {
+            Object::Return { value } => *value,
+            err @ Object::Error { .. } => err,
+            obj => obj,
+        }
+    }
+
+    fn eval_stmts(&mut self, stmts: &'a Vec<ast::Statement<'a>>) -> Object {
+        let mut result = NULL;
+        for stmt in stmts {
+            result = match self.eval_stmt(&stmt) {
+                obj @ Object::Return { .. } | obj @ Object::Error { .. } => return obj,
+                obj => obj,
             }
         }
-        ast::Expression::Binary(node) => {
-            eval_binary_expr(eval_expr(&node.lhs), &node.op, eval_expr(&node.rhs))
+        result
+    }
+
+    fn eval_stmt(&mut self, stmt: &'a ast::Statement) -> Object {
+        match stmt {
+            ast::Statement::Expression(node) => self.eval_expr(&node.expr),
+            ast::Statement::Block(node) => self.eval_stmts(&node.stmts),
+            ast::Statement::Return(node) => match self.eval_expr(&node.value) {
+                o @ Object::Error { .. } => o,
+                o => Object::Return { value: Box::new(o) },
+            },
+            ast::Statement::Let(node) => match self.eval_expr(&node.value) {
+                o @ Object::Error { .. } => o,
+                // o => Object::Return { value: Box::new(o) },
+                o => {
+                    dbg!(&node.name);
+                    self.set_identifier(&node.name, o);
+                    NULL
+                }
+            },
         }
-        t => unimplemented!("{}", t.to_string()),
     }
-}
 
-fn truthy(obj: Object) -> bool {
-    match obj {
-        Object::Boolean { value } => value,
-        Object::Integer { value } => value != 0,
-        Object::Null => false,
+    fn eval_expr(&mut self, expr: &'a ast::Expression) -> Object {
+        match expr {
+            ast::Expression::Integer(node) => Object::Integer { value: node.int },
+            ast::Expression::Boolean(node) if node.value => TRUE,
+            ast::Expression::Boolean(_) => FALSE,
+            ast::Expression::Prefix(node) => match self.eval_expr(&node.expr) {
+                e @ Object::Error { .. } => e,
+                o => self.eval_prefix_expr(&node.op, o),
+            },
+            ast::Expression::IfElse(node) => match self.eval_expr(&node.condition) {
+                e @ Object::Error { .. } => e,
+                cond => match (Interpreter::truthy(cond), &node.alternative) {
+                    (true, _) => self.eval_stmt(&node.then),
+                    (false, Some(stmt)) => self.eval_stmt(&stmt),
+                    (false, None) => NULL,
+                },
+            },
+            ast::Expression::Binary(node) => {
+                match (self.eval_expr(&node.lhs), self.eval_expr(&node.rhs)) {
+                    (e @ Object::Error { .. }, _) | (_, e @ Object::Error { .. }) => e,
+                    (lhs, rhs) => self.eval_binary_expr(lhs, &node.op, rhs),
+                }
+            }
+            ast::Expression::Literal(node) => match self.get_identifier(&node.token) {
+                None => err_identifier_not_found(&node.token),
+                Some(obj) => obj,
+            },
+            t => unimplemented!("{}", t.to_string()),
+        }
     }
-}
 
-fn eval_prefix_expr<'a>(t: &Token<'a>, obj: Object) -> Object {
-    match t {
-        Token::Not => match obj {
-            Object::Boolean { value: v } if v => FALSE,
-            Object::Boolean { value: _ } => TRUE,
-            Object::Null => TRUE,
-            _ => FALSE,
-        },
-        Token::Minus => match obj {
-            Object::Integer { value: v } => Object::Integer { value: -v },
-            _ => Object::Null,
-        },
-        _ => Object::Null,
+    fn truthy(obj: Object) -> bool {
+        match obj {
+            Object::Boolean { value } => value,
+            Object::Integer { value } => value != 0,
+            _ => false,
+        }
     }
-}
 
-fn eval_binary_expr<'a>(lhs: Object, op: &Token, rhs: Object) -> Object {
-    match (lhs, rhs) {
-        (Object::Integer { value: l }, Object::Integer { value: r }) => match op {
-            Token::Minus => Object::Integer { value: l - r },
-            Token::Plus => Object::Integer { value: l + r },
-            Token::Asterisk => Object::Integer { value: l * r },
-            Token::Slash => Object::Integer { value: l / r },
-            Token::EQ => Object::Boolean { value: l == r },
-            Token::NotEQ => Object::Boolean { value: l != r },
-            Token::GT => Object::Boolean { value: l > r },
-            Token::LT => Object::Boolean { value: l < r },
-            _ => Object::Null,
-        },
-        (Object::Boolean { value: l }, Object::Boolean { value: r }) => match op {
-            Token::EQ => Object::Boolean { value: l == r },
-            Token::NotEQ => Object::Boolean { value: l != r },
-            _ => Object::Null,
-        },
-        _ => Object::Null,
+    fn eval_prefix_expr(&self, t: &Token<'a>, obj: Object) -> Object {
+        match t {
+            Token::Not => match obj {
+                Object::Boolean { value: v } if v => FALSE,
+                Object::Boolean { value: _ } => TRUE,
+                Object::Null => TRUE,
+                _ => FALSE,
+            },
+            Token::Minus => match obj {
+                Object::Integer { value: v } => Object::Integer { value: -v },
+                _ => err_type_mismatch(&Object::Null, t, &obj),
+            },
+            _ => unreachable!("there's a problem with the parser!"),
+        }
+    }
+
+    fn eval_binary_expr(&self, lhs: Object, op: &Token, rhs: Object) -> Object {
+        if lhs.type_str() != rhs.type_str() {
+            return err_type_mismatch(&lhs, op, &rhs);
+        }
+        match (&lhs, &rhs) {
+            (Object::Integer { value: l }, Object::Integer { value: r }) => match op {
+                Token::Minus => Object::Integer { value: l - r },
+                Token::Plus => Object::Integer { value: l + r },
+                Token::Asterisk => Object::Integer { value: l * r },
+                Token::Slash => Object::Integer { value: l / r },
+                Token::EQ => Object::Boolean { value: l == r },
+                Token::NotEQ => Object::Boolean { value: l != r },
+                Token::GT => Object::Boolean { value: l > r },
+                Token::LT => Object::Boolean { value: l < r },
+                _ => err_unknown_op(&lhs, op, &rhs),
+            },
+            (Object::Boolean { value: l }, Object::Boolean { value: r }) => match op {
+                Token::EQ => Object::Boolean { value: l == r },
+                Token::NotEQ => Object::Boolean { value: l != r },
+                _ => err_unknown_op(&lhs, op, &rhs),
+            },
+            _ => err_unknown_op(&lhs, op, &rhs),
+        }
     }
 }
 
@@ -146,7 +257,8 @@ mod tests {
         let l = Lexer::new(case.input);
         let mut p = Parser::new(l);
         let program = p.parse_program();
-        let object = eval(&program.unwrap());
+        let interpreter = Interpreter::new();
+        let object = interpreter.eval(&program.unwrap());
         object
     }
 
@@ -166,7 +278,10 @@ mod tests {
             let object = quick_eval(&case);
             match object {
                 Object::Integer { value } => assert_eq!(value, case.expected),
-                _ => panic!("unexpected object type int, got: {}", object),
+                _ => panic!(
+                    "unexpected object type int, got: {} in case {}",
+                    object, case.input
+                ),
             }
         }
     }
@@ -231,6 +346,66 @@ mod tests {
         match null_program {
             Object::Null => {}
             _ => panic!("unexpected object type null, got: {}", null_program),
+        }
+    }
+
+    #[test]
+    fn test_return_stmt() {
+        let cases = vec![
+            Case::new("return 0", 0),
+            Case::new("if (10 > 1) {return 10;}", 10),
+            Case::new("if (10 > 1) { if (10 > 1) {return 10;} return 1;}", 10),
+        ];
+        for case in cases {
+            let object = quick_eval(&case);
+            match object {
+                Object::Integer { value } => assert_eq!(value, case.expected),
+                _ => panic!(
+                    "unexpected object type integer, got: {} in case {}",
+                    object, case.input
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn test_error_msg() {
+        let cases = vec![
+            Case::new("5 + true", "type mismatch: INTEGER + BOOLEAN"),
+            Case::new("5 + true; 5;", "type mismatch: INTEGER + BOOLEAN"),
+            Case::new("5; true + false; 5", "unknown operator: BOOLEAN + BOOLEAN"),
+            Case::new("5; true + false; 5", "unknown operator: BOOLEAN + BOOLEAN"),
+            Case::new("foobar", "identifier not found: foobar"),
+        ];
+        for case in cases {
+            let object = quick_eval(&case);
+            match object {
+                Object::Error { msg } => assert_eq!(msg, case.expected),
+                _ => panic!(
+                    "did not got error, instead: {} on case {}",
+                    object, case.input
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn test_let_stmts() {
+        let cases = vec![
+            Case::new("let a = 5; a", 5),
+            Case::new("let a = 5 * 5; a", 25),
+            Case::new("let a = 5; let b = 10; b*a;", 50),
+            Case::new("let a = 5; let b = 10; let c = a * b + 10; c", 60),
+        ];
+        for case in cases {
+            let object = quick_eval(&case);
+            match object {
+                Object::Integer { value } => assert_eq!(value, case.expected),
+                _ => panic!(
+                    "did not got error, instead: {} on case {}",
+                    object, case.input
+                ),
+            }
         }
     }
 }

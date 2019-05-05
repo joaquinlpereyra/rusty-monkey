@@ -4,7 +4,6 @@
 //! given a lexer.
 use super::lexer::{self, Token};
 pub mod ast;
-use std::convert::From;
 use std::error::Error;
 use std::{fmt, mem, result};
 
@@ -248,12 +247,12 @@ impl<'a> Parser<'a> {
 
     // Parse an if expression.
     // Current token should be positioned at the beginning IF keyword.
-    // The current token will be the rightmost } at the end of the function.
-    // IF ( condition ) { expr } else { expr }
-    // ^                                     $
+    // The current token will be the next one to the rightmost } at the end of the function.
+    // IF ( condition ) { expr } else { expr } ...
+    // ^                                       $
     // Else clause is optional!
-    // IF ( condition ) { expr }
-    // ^                       $
+    // IF ( condition ) { expr } ...
+    // ^                         $
     fn parse_if_expression(&mut self) -> Result<ast::Expression<'a>> {
         let token = self.next_token();
         self.checked_skip(Token::LParen)?;
