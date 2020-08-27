@@ -86,45 +86,41 @@ impl fmt::Display for Object {
 /// let result = Interpreter::new().eval(&ast);
 /// assert_eq!(result, Object::Integer{value: 5});
 /// ```
-pub struct Interpreter<'a> {
-    store: HashMap<&'a str, Object>,
+pub struct Interpreter {
+    store: HashMap<String, Object>,
 }
 
-impl<'a> Interpreter<'a> {
-    pub fn new() -> Interpreter<'a> {
-        Interpreter {
-            store: HashMap::new(),
-        }
+impl Interpreter {
+    pub fn new(store: HashMap<String, Object>) -> Interpreter {
+        Interpreter { store }
     }
 
-    fn get_identifier(&mut self, ident: &Token<'a>) -> Option<Object> {
+    fn get_identifier(&mut self, ident: &Token) -> Option<Object> {
         let name = match ident {
             Token::Ident(s) => s,
             _ => unreachable!("calling get_identifier on non ident token: {}", ident),
         };
-        dbg!(&self.store);
-        match self.store.get(name) {
+        match self.store.get(*name) {
             Some(obj) => Some(obj.clone()),
             None => None,
         }
     }
 
-    fn set_identifier(&mut self, ident: &'a str, obj: Object) {
-        dbg!(ident);
+    fn set_identifier(&mut self, ident: &str, obj: Object) {
+        let ident = ident.to_owned();
         self.store.insert(ident, obj);
     }
 
     // Evaluates a program, consuming the interpreter.
-    pub fn eval(self, program: &'a ast::Program) -> Object {
-        let mut s = self;
-        match s.eval_stmts(&program.statements) {
+    pub fn eval(&mut self, program: &ast::Program) -> Object {
+        match self.eval_stmts(&program.statements) {
             Object::Return { value } => *value,
             err @ Object::Error { .. } => err,
             obj => obj,
         }
     }
 
-    fn eval_stmts(&mut self, stmts: &'a Vec<ast::Statement<'a>>) -> Object {
+    fn eval_stmts(&mut self, stmts: &Vec<ast::Statement>) -> Object {
         let mut result = NULL;
         for stmt in stmts {
             result = match self.eval_stmt(&stmt) {
@@ -135,7 +131,7 @@ impl<'a> Interpreter<'a> {
         result
     }
 
-    fn eval_stmt(&mut self, stmt: &'a ast::Statement) -> Object {
+    fn eval_stmt(&mut self, stmt: &ast::Statement) -> Object {
         match stmt {
             ast::Statement::Expression(node) => self.eval_expr(&node.expr),
             ast::Statement::Block(node) => self.eval_stmts(&node.stmts),
@@ -147,7 +143,6 @@ impl<'a> Interpreter<'a> {
                 o @ Object::Error { .. } => o,
                 // o => Object::Return { value: Box::new(o) },
                 o => {
-                    dbg!(&node.name);
                     self.set_identifier(&node.name, o);
                     NULL
                 }
@@ -155,7 +150,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn eval_expr(&mut self, expr: &'a ast::Expression) -> Object {
+    fn eval_expr(&mut self, expr: &ast::Expression) -> Object {
         match expr {
             ast::Expression::Integer(node) => Object::Integer { value: node.int },
             ast::Expression::Boolean(node) if node.value => TRUE,
@@ -194,7 +189,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn eval_prefix_expr(&self, t: &Token<'a>, obj: Object) -> Object {
+    fn eval_prefix_expr(&self, t: &Token, obj: Object) -> Object {
         match t {
             Token::Not => match obj {
                 Object::Boolean { value: v } if v => FALSE,
