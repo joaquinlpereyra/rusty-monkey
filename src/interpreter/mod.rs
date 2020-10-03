@@ -22,6 +22,31 @@ pub enum Object {
     Null,
 }
 
+impl Object {
+    fn type_str(&self) -> &str {
+        match self {
+            Object::Boolean { value: _ } => "BOOLEAN",
+            Object::Integer { value: _ } => "INTEGER",
+            Object::Return { value: _ } => "RETURN",
+            Object::Error { msg: _ } => "ERR",
+            Object::Null => "NULL",
+        }
+    }
+}
+
+impl fmt::Display for Object {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match &self {
+            Object::Boolean { value } => format!("{}", value),
+            Object::Integer { value } => format!("{}", value),
+            Object::Return { value } => format! {"return {}", value},
+            Object::Error { msg } => format!("{}", msg),
+            Object::Null => "null".to_string(),
+        };
+        write!(f, "{}", s)
+    }
+}
+
 fn err_type_mismatch(lhs: &Object, op: &Token, rhs: &Object) -> Object {
     Object::Error {
         msg: format!(
@@ -50,28 +75,31 @@ fn err_identifier_not_found(ident: &Token) -> Object {
     }
 }
 
-impl Object {
-    fn type_str(&self) -> &str {
-        match self {
-            Object::Boolean { value: _ } => "BOOLEAN",
-            Object::Integer { value: _ } => "INTEGER",
-            Object::Return { value: _ } => "RETURN",
-            Object::Error { msg: _ } => "ERR",
-            Object::Null => "NULL",
-        }
-    }
+struct Env {
+    store: HashMap<String, Object>,
 }
 
-impl fmt::Display for Object {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s = match &self {
-            Object::Boolean { value } => format!("{}", value),
-            Object::Integer { value } => format!("{}", value),
-            Object::Return { value } => format! {"return {}", value},
-            Object::Error { msg } => format!("{}", msg),
-            Object::Null => "null".to_string(),
+impl Env {
+    pub fn new() -> Env {
+        Env {
+            store: HashMap::new(),
+        }
+    }
+
+    pub fn get(&mut self, ident: &Token) -> Option<Object> {
+        let name = match ident {
+            Token::Ident(s) => s,
+            _ => unreachable!("calling get on non ident token: {}", ident),
         };
-        write!(f, "{}", s)
+        match self.store.get(name) {
+            Some(obj) => Some(obj.clone()),
+            None => None,
+        }
+    }
+
+    pub fn set(&mut self, ident: &str, obj: Object) {
+        let ident = ident.to_owned();
+        self.store.insert(ident, obj);
     }
 }
 
@@ -87,34 +115,16 @@ impl fmt::Display for Object {
 /// assert_eq!(result, Object::Integer{value: 5});
 /// ```
 pub struct Interpreter {
-    store: HashMap<String, Object>,
+    env: Env,
 }
 
 impl Interpreter {
     pub fn new() -> Interpreter {
-        Interpreter {
-            store: HashMap::new(),
-        }
+        Interpreter { env: Env::new() }
     }
 
-    pub fn new_with_store(store: HashMap<String, Object>) -> Interpreter {
-        Interpreter { store }
-    }
-
-    fn get_identifier(&mut self, ident: &Token) -> Option<Object> {
-        let name = match ident {
-            Token::Ident(s) => s,
-            _ => unreachable!("calling get_identifier on non ident token: {}", ident),
-        };
-        match self.store.get(name) {
-            Some(obj) => Some(obj.clone()),
-            None => None,
-        }
-    }
-
-    fn set_identifier(&mut self, ident: &str, obj: Object) {
-        let ident = ident.to_owned();
-        self.store.insert(ident, obj);
+    fn new_with_env(env: Env) -> Interpreter {
+        Interpreter { env }
     }
 
     // Evaluates a program, consuming the interpreter.
@@ -149,7 +159,7 @@ impl Interpreter {
                 o @ Object::Error { .. } => o,
                 // o => Object::Return { value: Box::new(o) },
                 o => {
-                    self.set_identifier(&node.name, o);
+                    self.env.set(&node.name, o);
                     NULL
                 }
             },
@@ -157,7 +167,7 @@ impl Interpreter {
                 let range = self.eval_expr(&node.range);
                 if let Object::Integer { value } = range {
                     for _i in 0..value {
-                        self.set_identifier(&node.ident, Object::Integer { value: _i });
+                        self.env.set(&node.ident, Object::Integer { value: _i });
                         self.eval_stmt(&node.body);
                     }
                     NULL
@@ -193,7 +203,7 @@ impl Interpreter {
                     (lhs, rhs) => self.eval_binary_expr(lhs, &node.op, rhs),
                 }
             }
-            ast::Expression::Literal(node) => match self.get_identifier(&node.token) {
+            ast::Expression::Literal(node) => match self.env.get(&node.token) {
                 None => err_identifier_not_found(&node.token),
                 Some(obj) => obj,
             },
