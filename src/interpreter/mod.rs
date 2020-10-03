@@ -147,6 +147,20 @@ impl Interpreter {
                     NULL
                 }
             },
+            ast::Statement::ForLoop(node) => {
+                let range = self.eval_expr(&node.range);
+                if let Object::Integer { value } = range {
+                    for _i in 0..value {
+                        self.set_identifier(&node.ident, Object::Integer { value: _i });
+                        self.eval_stmt(&node.body);
+                    }
+                    NULL
+                } else {
+                    Object::Error {
+                        msg: "range is not an integer".to_owned(),
+                    }
+                }
+            }
         }
     }
 

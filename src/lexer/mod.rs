@@ -50,6 +50,8 @@ pub enum Token<'a> {
     If,
     Else,
     Return,
+    For,
+    In,
 }
 
 impl<'a> fmt::Display for Token<'a> {
@@ -82,6 +84,8 @@ impl<'a> fmt::Display for Token<'a> {
             Token::If => "if",
             Token::Else => "else",
             Token::Return => "return",
+            Token::For => "for",
+            Token::In => "in",
         };
         write!(f, "{}", string)
     }
@@ -172,6 +176,8 @@ impl<'a> Lexer<'a> {
                 "return" => Token::Return,
                 "true" => Token::True,
                 "false" => Token::False,
+                "for" => Token::For,
+                "in" => Token::In,
                 w if v.is_alphabetic() => Token::Ident(w),
                 w if v.is_numeric() => Token::Int(w),
                 w => Token::Illegal(w),

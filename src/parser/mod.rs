@@ -159,6 +159,9 @@ impl<'a> Parser<'a> {
             Token::Return => self
                 .parse_return_stmt()
                 .map(|stmt| ast::Statement::Return(stmt)),
+            Token::For => self
+                .parse_for_stmt()
+                .map(|stmt| ast::Statement::ForLoop(stmt)),
             _ => self
                 .parse_expression_statement()
                 .map(|stmt| ast::Statement::Expression(stmt)),
@@ -197,7 +200,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Parses an infix expression.
+    // Parses an infix expression
     // Takes an optional pointer to a Left Hand Side expression.
     // If given, this will return the LHS joined with the RHS
     // Produces an error if the current token is not valid.
@@ -273,6 +276,32 @@ impl<'a> Parser<'a> {
             then,
             alternative,
         }));
+    }
+
+    // Parse a for loop.
+    // Current token should be positioned at the FOR token.
+    // for x in 5 { }
+    fn parse_for_stmt(&mut self) -> Result<ast::ForLoopNode<'a>> {
+        let token = self.next_token();
+
+        // if the current toxen is not an ident, wrong syntax!
+        match &self.current_token {
+            Token::Ident(_) => {}
+            t => return Err(ParserError::new(&Token::Ident("?"), &t)),
+        }
+
+        let ident = self.next_token();
+        self.checked_skip(Token::In)?;
+        let range = self.parse_int()?;
+        let body = Box::new(self.parse_block_stmt()?);
+        let for_loop = Ok(ast::ForLoopNode {
+            token: token,
+            range: range,
+            ident: ident.to_string(),
+            body: body,
+        });
+        self.checked_skip(Token::RBrace)?;
+        for_loop
     }
 
     // Parses a function.

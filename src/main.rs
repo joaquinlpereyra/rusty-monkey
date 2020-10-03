@@ -22,7 +22,7 @@ fn main() {
             Ok(program) => program,
             Err(e) => {
                 println!("error: {}", e);
-                break;
+                continue;
             }
         };
         println!("parsed: {}", p);

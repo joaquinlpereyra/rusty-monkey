@@ -64,6 +64,7 @@ pub enum Statement<'a> {
     Return(ReturnNode<'a>),
     Expression(ExpressionStatementNode<'a>),
     Block(BlockNode<'a>),
+    ForLoop(ForLoopNode<'a>),
 }
 
 impl<'a> fmt::Display for Statement<'a> {
@@ -80,6 +81,7 @@ impl<'a> fmt::Display for Statement<'a> {
                     .collect::<Vec<String>>()
                     .join("\n")
             ),
+            Statement::ForLoop(n) => format!("FOR {} IN {} {{ {} }}", n.ident, n.range, n.body,),
         };
         write!(f, "{}", s)
     }
@@ -179,4 +181,12 @@ pub struct FnCallNode<'a> {
     pub token: Token<'a>,
     pub fun: Box<Expression<'a>>,
     pub args: Vec<Expression<'a>>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ForLoopNode<'a> {
+    pub token: Token<'a>,
+    pub range: Expression<'a>,
+    pub ident: String,
+    pub body: Box<Statement<'a>>,
 }
