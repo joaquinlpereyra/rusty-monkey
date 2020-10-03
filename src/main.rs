@@ -8,8 +8,7 @@ use std::collections::HashMap;
 use std::io::{self, Write};
 
 fn main() {
-    let store = HashMap::new();
-    let mut interpreter = Interpreter::new(store);
+    let mut interpreter = Interpreter::new();
     loop {
         print!("🙈 🙊 🙉 ");
         io::stdout().flush().unwrap();

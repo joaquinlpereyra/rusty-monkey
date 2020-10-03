@@ -752,7 +752,7 @@ if (10 > 1) {
 return 6;
 ",
         );
-        let program = p.parse_program().unwrap();
+        let _program = p.parse_program().unwrap();
     }
 
     #[test]

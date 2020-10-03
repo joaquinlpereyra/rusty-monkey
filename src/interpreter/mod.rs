@@ -91,7 +91,13 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
-    pub fn new(store: HashMap<String, Object>) -> Interpreter {
+    pub fn new() -> Interpreter {
+        Interpreter {
+            store: HashMap::new(),
+        }
+    }
+
+    pub fn new_with_store(store: HashMap<String, Object>) -> Interpreter {
         Interpreter { store }
     }
 
@@ -266,7 +272,7 @@ mod tests {
         let l = Lexer::new(case.input);
         let mut p = Parser::new(l);
         let program = p.parse_program();
-        let interpreter = Interpreter::new();
+        let mut interpreter = Interpreter::new();
         let object = interpreter.eval(&program.unwrap());
         object
     }
