@@ -13,6 +13,10 @@ use std::{fmt, mem, result};
 // Silly result alias.
 type Result<T> = result::Result<T, Box<ParserError>>;
 
+// LITERAL string to be used in errors
+static LITERAL: &'static str = "literal";
+static QUESTION: &'static str = "?";
+
 enum OperatorPrecedence {
     Lowest,
     Equals,
@@ -37,7 +41,7 @@ impl OperatorPrecedence {
     }
 }
 
-fn precedence<'a>(t: &Token<'a>) -> OperatorPrecedence {
+fn precedence(t: &Token) -> OperatorPrecedence {
     match t {
         Token::Slash | Token::Asterisk => OperatorPrecedence::Product,
         Token::Plus | Token::Minus => OperatorPrecedence::Sum,
@@ -56,8 +60,8 @@ pub struct ParserError {
     got: String,
 }
 
-impl<'a> ParserError {
-    fn new(expected: &Token<'a>, got: &Token<'a>) -> Box<ParserError> {
+impl ParserError {
+    fn new(expected: &Token, got: &Token) -> Box<ParserError> {
         Box::new(ParserError {
             expected: expected.to_string(),
             got: got.to_string(),
@@ -68,7 +72,7 @@ impl<'a> ParserError {
         Box::new(ParserError { expected, got })
     }
 
-    fn new_with_expression(expected: &Token<'a>, got: &ast::Expression<'a>) -> Box<ParserError> {
+    fn new_with_expression(expected: &Token, got: &ast::Expression) -> Box<ParserError> {
         ParserError::new_from_strings(expected.to_string(), got.to_string())
     }
 }
@@ -84,17 +88,17 @@ impl Error for ParserError {}
 /// The parser is responsible
 /// from translating from a series
 /// of tokens to actual ASTs nodes.
-pub struct Parser<'a> {
-    lexer: lexer::Lexer<'a>,
-    current_token: Token<'a>,
-    peek_token: Token<'a>,
+pub struct Parser {
+    lexer: lexer::Lexer,
+    current_token: Token,
+    peek_token: Token,
 }
 
-impl<'a> Parser<'a> {
+impl Parser {
     // Create a new parser.
     // Depends on a lexer capable of iterating over
     // the tokens.
-    pub fn new(mut lexer: lexer::Lexer<'a>) -> Parser {
+    pub fn new(mut lexer: lexer::Lexer) -> Parser {
         let current_token = lexer.next_token();
         let peek_token = lexer.next_token();
 
@@ -106,7 +110,7 @@ impl<'a> Parser<'a> {
     }
 
     // Read the next token and return the current one.
-    fn next_token(&mut self) -> Token<'a> {
+    fn next_token(&mut self) -> Token {
         // mem::replace is pretty useful
         // allows the borrow checker to relax a bit, enjoy life!
         let next = mem::replace(&mut self.peek_token, self.lexer.next_token());
@@ -138,7 +142,7 @@ impl<'a> Parser<'a> {
     }
 
     // Parses a program.
-    pub fn parse_program(&mut self) -> Result<ast::Program<'a>> {
+    pub fn parse_program(&mut self) -> Result<ast::Program> {
         let mut statements = Vec::new();
         while self.current_token != Token::EOF {
             match self.parse_statement() {
@@ -153,7 +157,7 @@ impl<'a> Parser<'a> {
 
     // Parses a single statament, which should be found
     // at the current token.
-    fn parse_statement(&mut self) -> Result<ast::Statement<'a>> {
+    fn parse_statement(&mut self) -> Result<ast::Statement> {
         match &self.current_token {
             Token::Let => self.parse_let_stmt().map(|stmt| ast::Statement::Let(stmt)),
             Token::Return => self
@@ -172,7 +176,7 @@ impl<'a> Parser<'a> {
     // Takes the precedence of the last scanned token as argument.
     // As default, you should pass OperatorPrecedence::Lowest,
     // so any actual precedence takes over.
-    fn parse_expression(&mut self, prec: OperatorPrecedence) -> Result<ast::Expression<'a>> {
+    fn parse_expression(&mut self, prec: OperatorPrecedence) -> Result<ast::Expression> {
         let mut expr = self.prefix_parse()?;
         let prev_precedence: i8 = prec.into();
         let mut current_token_precedence = self.current_token_precedence().into();
@@ -184,7 +188,7 @@ impl<'a> Parser<'a> {
     }
 
     // Parses a prefix expression.
-    fn prefix_parse(&mut self) -> Result<ast::Expression<'a>> {
+    fn prefix_parse(&mut self) -> Result<ast::Expression> {
         match &self.current_token {
             Token::Ident(_) => self.parse_identifier(),
             Token::Int(_) => self.parse_int(),
@@ -204,7 +208,7 @@ impl<'a> Parser<'a> {
     // Takes an optional pointer to a Left Hand Side expression.
     // If given, this will return the LHS joined with the RHS
     // Produces an error if the current token is not valid.
-    fn infix_parse(&mut self, lhs: Box<ast::Expression<'a>>) -> Result<ast::Expression<'a>> {
+    fn infix_parse(&mut self, lhs: Box<ast::Expression>) -> Result<ast::Expression> {
         match &self.current_token {
             Token::Plus
             | Token::Minus
@@ -224,7 +228,7 @@ impl<'a> Parser<'a> {
 
     // Parses an infix expression, withouth checking if the current token is
     // a valid one.
-    fn parse_infix_expr(&mut self, lhs: Box<ast::Expression<'a>>) -> Result<ast::Expression<'a>> {
+    fn parse_infix_expr(&mut self, lhs: Box<ast::Expression>) -> Result<ast::Expression> {
         let precedence = self.current_token_precedence();
         let op = self.next_token();
         let rhs = match self.parse_expression(precedence) {
@@ -238,7 +242,7 @@ impl<'a> Parser<'a> {
     // Parses a call to a function. Will start at function name and finish at last parenthesis.
     // let x = add(2 + 3);
     //         ^          $
-    fn parse_fn_call(&mut self, fun: Box<ast::Expression<'a>>) -> Result<ast::Expression<'a>> {
+    fn parse_fn_call(&mut self, fun: Box<ast::Expression>) -> Result<ast::Expression> {
         let token = self.next_token();
         let args = self.parse_fn_args()?;
         Ok(ast::Expression::FnCall(ast::FnCallNode {
@@ -256,7 +260,7 @@ impl<'a> Parser<'a> {
     // Else clause is optional!
     // IF ( condition ) { expr } ...
     // ^                         $
-    fn parse_if_expression(&mut self) -> Result<ast::Expression<'a>> {
+    fn parse_if_expression(&mut self) -> Result<ast::Expression> {
         let token = self.next_token();
         self.checked_skip(Token::LParen)?;
         let condition = Box::new(self.parse_expression(OperatorPrecedence::Lowest)?);
@@ -281,13 +285,13 @@ impl<'a> Parser<'a> {
     // Parse a for loop.
     // Current token should be positioned at the FOR token.
     // for x in 5 { }
-    fn parse_for_stmt(&mut self) -> Result<ast::ForLoopNode<'a>> {
+    fn parse_for_stmt(&mut self) -> Result<ast::ForLoopNode> {
         let token = self.next_token();
 
         // if the current toxen is not an ident, wrong syntax!
         match &self.current_token {
             Token::Ident(_) => {}
-            t => return Err(ParserError::new(&Token::Ident("?"), &t)),
+            t => return Err(ParserError::new(&Token::Ident(String::from(QUESTION)), &t)),
         }
 
         let ident = self.next_token();
@@ -308,7 +312,7 @@ impl<'a> Parser<'a> {
     // Current token should be positioned at the FN token.
     // let foo  = fn (x,y) { x + y; }
     //            ^                 $
-    fn parse_fn(&mut self) -> Result<ast::Expression<'a>> {
+    fn parse_fn(&mut self) -> Result<ast::Expression> {
         self.checked_skip(Token::Fn)?;
         self.checked_skip(Token::LParen)?;
         let params = self.parse_fn_args()?;
@@ -321,7 +325,7 @@ impl<'a> Parser<'a> {
         };
         if let Some(param) = params.iter().find(|param| !is_literal(param)) {
             return Err(ParserError::new_with_expression(
-                &Token::Ident("identifier"),
+                &Token::Ident(String::from(LITERAL)),
                 &param,
             ));
         }
@@ -341,7 +345,7 @@ impl<'a> Parser<'a> {
     // the last parenthesis.
     // fn(x, y, z) { something }
     //    ^        $
-    fn parse_fn_args(&mut self) -> Result<Vec<ast::Expression<'a>>> {
+    fn parse_fn_args(&mut self) -> Result<Vec<ast::Expression>> {
         let mut args = Vec::new();
         // no arguments for this function
         if let Token::RParen = self.current_token {
@@ -366,7 +370,7 @@ impl<'a> Parser<'a> {
     // { BLOCK }
     // ^       $
     // BEGIN   END
-    fn parse_block_stmt(&mut self) -> Result<ast::Statement<'a>> {
+    fn parse_block_stmt(&mut self) -> Result<ast::Statement> {
         self.checked_skip(Token::LBrace)?;
         let mut stmts = Vec::new();
         while self.current_token != Token::RBrace {
@@ -385,7 +389,7 @@ impl<'a> Parser<'a> {
     }
 
     // Parses an identifier.
-    fn parse_identifier(&mut self) -> Result<ast::Expression<'a>> {
+    fn parse_identifier(&mut self) -> Result<ast::Expression> {
         Ok(ast::Expression::Literal(ast::LiteralNode {
             token: self.next_token(),
         }))
@@ -397,7 +401,7 @@ impl<'a> Parser<'a> {
     // the next after the rightmost ).
     // (2 + 3) .
     // ^       $
-    fn parse_paren_group(&mut self) -> Result<ast::Expression<'a>> {
+    fn parse_paren_group(&mut self) -> Result<ast::Expression> {
         self.checked_skip(Token::LParen)?;
         let expr = self.parse_expression(OperatorPrecedence::Lowest);
         if self.next_token() != Token::RParen {
@@ -407,7 +411,7 @@ impl<'a> Parser<'a> {
     }
 
     // Parses a boolean expression
-    fn parse_bool(&mut self) -> Result<ast::Expression<'a>> {
+    fn parse_bool(&mut self) -> Result<ast::Expression> {
         let token = self.next_token();
         let value = match token {
             Token::True => true,
@@ -423,7 +427,7 @@ impl<'a> Parser<'a> {
     }
 
     // Parses a prefix operation.
-    fn parse_prefix_op(&mut self) -> Result<ast::Expression<'a>> {
+    fn parse_prefix_op(&mut self) -> Result<ast::Expression> {
         let token = self.next_token();
         let rhs = match self.parse_expression(OperatorPrecedence::Prefix) {
             Ok(expr) => Box::new(expr),
@@ -437,14 +441,24 @@ impl<'a> Parser<'a> {
     }
 
     // Parses an integer literal.
-    fn parse_int(&mut self) -> Result<ast::Expression<'a>> {
+    fn parse_int(&mut self) -> Result<ast::Expression> {
         let int_token = self.next_token();
-        let n = match int_token {
+        let n = match &int_token {
             Token::Int(n) => match n.parse::<i64>() {
                 Ok(n) => n,
-                Err(_) => return Err(ParserError::new(&Token::Int("?"), &self.current_token)),
+                Err(_) => {
+                    return Err(ParserError::new(
+                        &Token::Int(String::from(QUESTION)),
+                        &self.current_token,
+                    ))
+                }
             },
-            _ => return Err(ParserError::new(&Token::Int("?"), &self.current_token)),
+            _ => {
+                return Err(ParserError::new(
+                    &Token::Int(String::from(QUESTION)),
+                    &self.current_token,
+                ))
+            }
         };
         Ok(ast::Expression::Integer(ast::IntegerNode {
             token: int_token,
@@ -453,7 +467,7 @@ impl<'a> Parser<'a> {
     }
 
     // Parses an expression statement.
-    fn parse_expression_statement(&mut self) -> Result<ast::ExpressionStatementNode<'a>> {
+    fn parse_expression_statement(&mut self) -> Result<ast::ExpressionStatementNode> {
         let token = self.current_token.clone();
         let expr = self.parse_expression(OperatorPrecedence::Lowest)?;
         if let Token::Semicolon = self.peek_token {
@@ -464,7 +478,7 @@ impl<'a> Parser<'a> {
 
     // Parses a return statement. The current token should be
     // the return keyword.
-    fn parse_return_stmt(&mut self) -> Result<ast::ReturnNode<'a>> {
+    fn parse_return_stmt(&mut self) -> Result<ast::ReturnNode> {
         let token = self.next_token();
         let value = self.parse_expression(OperatorPrecedence::Lowest)?;
         Ok(ast::ReturnNode { token, value })
@@ -473,13 +487,13 @@ impl<'a> Parser<'a> {
     // Parses a let statement, which should start at the current token.
     // let x = 2;
     // ^
-    fn parse_let_stmt(&mut self) -> Result<ast::LetNode<'a>> {
+    fn parse_let_stmt(&mut self) -> Result<ast::LetNode> {
         let let_token = self.next_token();
 
         // if the current toxen is not an ident, wrong syntax!
         match &self.current_token {
             Token::Ident(_) => {}
-            t => return Err(ParserError::new(&Token::Ident("?"), &t)),
+            t => return Err(ParserError::new(&Token::Ident(String::from(QUESTION)), &t)),
         }
 
         let ident_token = self.next_token();
@@ -499,7 +513,7 @@ mod tests {
     use super::*;
 
     fn make_parser(input: &str) -> Parser {
-        let l = lexer::Lexer::new(input);
+        let l = lexer::Lexer::new(input.to_owned());
         Parser::new(l)
     }
 
@@ -508,7 +522,7 @@ mod tests {
         let mut p = make_parser("let answer = 42;");
         assert_eq!(p.current_token, Token::Let);
         p.next_token();
-        assert_eq!(p.current_token, Token::Ident("answer"));
+        assert_eq!(p.current_token, Token::Ident(String::from("answer")));
     }
 
     #[test]
@@ -529,7 +543,7 @@ let foobar = 838383;
                 token: Token::Let,
                 name: "x".to_string(),
                 value: ast::Expression::Literal(ast::LiteralNode {
-                    token: Token::Int("5"),
+                    token: Token::Int(String::from("5")),
                 }),
             },
             ast::LetNode {
@@ -538,11 +552,11 @@ let foobar = 838383;
                 value: ast::Expression::Binary(ast::BinaryNode {
                     op: Token::Plus,
                     lhs: Box::new(ast::Expression::Integer(ast::IntegerNode {
-                        token: Token::Int("10"),
+                        token: Token::Int(String::from("10")),
                         int: 10,
                     })),
                     rhs: Box::new(ast::Expression::Integer(ast::IntegerNode {
-                        token: Token::Int("3"),
+                        token: Token::Int(String::from("3")),
                         int: 3,
                     })),
                 }),
@@ -551,7 +565,7 @@ let foobar = 838383;
                 token: Token::Let,
                 name: "foobar".to_string(),
                 value: ast::Expression::Literal(ast::LiteralNode {
-                    token: Token::Int("838383"),
+                    token: Token::Int(String::from("838383")),
                 }),
             },
         ];
@@ -609,7 +623,9 @@ foobar
         let program = program.unwrap();
         let stmt = program.statements.get(0).unwrap();
         match stmt {
-            ast::Statement::Expression(n) => assert_eq!(n.token, Token::Ident("foobar")),
+            ast::Statement::Expression(n) => {
+                assert_eq!(n.token, Token::Ident(String::from("foobar")))
+            }
             _ => panic!("expected stmt expression"),
         }
     }

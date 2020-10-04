@@ -22,7 +22,7 @@ pub enum Object {
     Null,
 }
 
-fn err_type_mismatch<'a>(lhs: &Object, op: &Token<'a>, rhs: &Object) -> Object {
+fn err_type_mismatch(lhs: &Object, op: &Token, rhs: &Object) -> Object {
     Object::Error {
         msg: format!(
             "type mismatch: {} {} {}",
@@ -33,7 +33,7 @@ fn err_type_mismatch<'a>(lhs: &Object, op: &Token<'a>, rhs: &Object) -> Object {
     }
 }
 
-fn err_unknown_op<'a>(lhs: &Object, op: &Token<'a>, rhs: &Object) -> Object {
+fn err_unknown_op(lhs: &Object, op: &Token, rhs: &Object) -> Object {
     Object::Error {
         msg: format!(
             "unknown operator: {} {} {}",
@@ -44,7 +44,7 @@ fn err_unknown_op<'a>(lhs: &Object, op: &Token<'a>, rhs: &Object) -> Object {
     }
 }
 
-fn err_identifier_not_found<'a>(ident: &Token<'a>) -> Object {
+fn err_identifier_not_found(ident: &Token) -> Object {
     Object::Error {
         msg: format!("identifier not found: {}", ident),
     }
@@ -81,7 +81,7 @@ impl fmt::Display for Object {
 /// use monkey::lexer::Lexer;
 /// use monkey::parser::Parser;
 /// use monkey::interpreter::{Interpreter, Object};
-/// let tokens = Lexer::new("5;");
+/// let tokens = Lexer::new(String::from("5;"));
 /// let ast = Parser::new(tokens).parse_program().unwrap();
 /// let result = Interpreter::new().eval(&ast);
 /// assert_eq!(result, Object::Integer{value: 5});
@@ -106,7 +106,7 @@ impl Interpreter {
             Token::Ident(s) => s,
             _ => unreachable!("calling get_identifier on non ident token: {}", ident),
         };
-        match self.store.get(*name) {
+        match self.store.get(name) {
             Some(obj) => Some(obj.clone()),
             None => None,
         }
@@ -269,7 +269,7 @@ mod tests {
     }
 
     fn quick_eval<'a, T>(case: &Case<'a, T>) -> Object {
-        let l = Lexer::new(case.input);
+        let l = Lexer::new(case.input.to_owned());
         let mut p = Parser::new(l);
         let program = p.parse_program();
         let mut interpreter = Interpreter::new();

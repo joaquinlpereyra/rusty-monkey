@@ -4,7 +4,6 @@ extern crate monkey;
 use monkey::interpreter::Interpreter;
 use monkey::lexer::{Lexer, Token};
 use monkey::parser::Parser;
-use std::collections::HashMap;
 use std::io::{self, Write};
 
 fn main() {
@@ -13,10 +12,9 @@ fn main() {
         print!("🙈 🙊 🙉 ");
         io::stdout().flush().unwrap();
         let line: String = read!("{}\n");
-        let l_debug = Lexer::new(&line);
-        let tokens: Vec<Token> = l_debug.into_iter().collect();
+        let l = Lexer::new(line);
+        let tokens: Vec<Token> = l.clone().into_iter().collect();
         println!("tokens: {:?}", tokens);
-        let l = Lexer::new(&line);
         let p = match Parser::new(l).parse_program() {
             Ok(program) => program,
             Err(e) => {

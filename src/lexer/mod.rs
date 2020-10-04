@@ -5,22 +5,22 @@
 //! # Example
 //! ```
 //! use monkey::lexer::{Lexer, Token, Token::{Let, Ident, Assign, Int, Semicolon}};
-//! let program = Lexer::new("let answer = 42;");
+//! let program = Lexer::new(String::from("let answer = 42;"));
 //! let tokens = program.into_iter().collect::<Vec<Token>>();
-//! assert_eq!(tokens, vec![Let, Ident("answer"), Assign, Int("42"), Semicolon]);
+//! assert_eq!(tokens, vec![Let, Ident("answer".to_owned()), Assign, Int("42".to_owned()), Semicolon]);
 //! ```
 use std::fmt;
 
 /// Describes all the tokens for Monkey
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Token<'a> {
+pub enum Token {
     // Special tokens
-    Illegal(&'a str),
+    Illegal(String),
     EOF,
 
     // Identifers and literals
-    Ident(&'a str),
-    Int(&'a str),
+    Ident(String),
+    Int(String),
 
     // Operators
     Assign,
@@ -54,7 +54,7 @@ pub enum Token<'a> {
     In,
 }
 
-impl<'a> fmt::Display for Token<'a> {
+impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let string = match self {
             Token::Illegal(s) => s,
@@ -94,29 +94,36 @@ impl<'a> fmt::Display for Token<'a> {
 /// The lexer is the workhouse of this module.
 /// It's designed to parse a Monkey string
 /// into tokens.
-#[derive(Debug)]
-pub struct Lexer<'a> {
-    input: &'a str,
+#[derive(Debug, Clone)]
+pub struct Lexer {
+    input: String,
     position: usize,  // current position in input
     ch: Option<char>, // the char we are reading currently
 }
 
 // TODO: support unicode, with emojis and all!
-impl<'a> Lexer<'a> {
+impl Lexer {
     /// Create a new Lexer given some input string.
     /// # Example
     /// ```
     /// use monkey::lexer::{Lexer, Token};
-    /// let program = Lexer::new("let answer = 42;");
+    /// let program = Lexer::new("let answer = 42;".to_owned());
     /// let tokens = program.into_iter().collect::<Vec<Token>>();
     /// assert_eq!(tokens.len(), 5);
     /// ```
-    pub fn new(input: &'a str) -> Lexer<'a> {
-        Lexer {
+    pub fn new(input: String) -> Lexer {
+        let mut l = Lexer {
             input,
             position: 0,
-            ch: input.chars().nth(0),
-        }
+            ch: None,
+        };
+
+        // if I try to d o: ch: input.chars().nth(0)
+        // it complains the lexer has already taken ownership
+        // of the input :(
+        l.ch = l.input.chars().nth(0);
+
+        l
     }
 
     /// Get the next_token from the Lexer.
@@ -126,19 +133,19 @@ impl<'a> Lexer<'a> {
     /// # Example
     /// ```
     /// use monkey::lexer::{Token, Lexer};
-    /// let mut program = Lexer::new("let answer = 42;");
+    /// let mut program = Lexer::new("let answer = 42;".to_owned());
     /// let mut t = program.next_token();
     /// assert_eq!(t, Token::Let);
     /// t = program.next_token();
-    /// assert_eq!(t, Token::Ident("answer"));
+    /// assert_eq!(t, Token::Ident(String::from("answer")));
     /// t = program.next_token();
     /// assert_eq!(t, Token::Assign);
     /// t = program.next_token();
-    /// assert_eq!(t, Token::Int("42"));
+    /// assert_eq!(t, Token::Int(String::from("42")));
     /// t = program.next_token();
     /// assert_eq!(t, Token::Semicolon);
     /// ```
-    pub fn next_token(&mut self) -> Token<'a> {
+    pub fn next_token(&mut self) -> Token {
         while self.ch.is_some() && self.ch.unwrap().is_whitespace() {
             self.read_char()
         }
@@ -178,9 +185,9 @@ impl<'a> Lexer<'a> {
                 "false" => Token::False,
                 "for" => Token::For,
                 "in" => Token::In,
-                w if v.is_alphabetic() => Token::Ident(w),
-                w if v.is_numeric() => Token::Int(w),
-                w => Token::Illegal(w),
+                w if v.is_alphabetic() => Token::Ident(w.to_owned()),
+                w if v.is_numeric() => Token::Int(w.to_owned()),
+                w => Token::Illegal(w.to_owned()),
             },
         };
         self.read_char();
@@ -213,7 +220,7 @@ impl<'a> Lexer<'a> {
             || c.is_whitespace();
     }
 
-    fn read_word(&mut self) -> &'a str {
+    fn read_word(&mut self) -> &str {
         let pos = self.position;
         while self.ch.is_some() && !Lexer::is_delimiter(self.ch.unwrap()) {
             self.read_char();
@@ -231,9 +238,9 @@ impl<'a> Lexer<'a> {
     }
 }
 
-impl<'a> IntoIterator for Lexer<'a> {
-    type Item = Token<'a>;
-    type IntoIter = ::std::vec::IntoIter<Token<'a>>;
+impl IntoIterator for Lexer {
+    type Item = Token;
+    type IntoIter = ::std::vec::IntoIter<Token>;
 
     fn into_iter(mut self) -> Self::IntoIter {
         let mut tokens: Vec<Token> = Vec::new();
@@ -271,41 +278,41 @@ if (5 > 10) {
 ";
         let expected: Vec<Token> = vec![
             Token::Let,
-            Token::Ident("ten"),
+            Token::Ident(String::from("ten")),
             Token::Assign,
-            Token::Int("10"),
+            Token::Int(String::from("10")),
             Token::Semicolon,
             Token::Let,
-            Token::Ident("add"),
+            Token::Ident(String::from("add")),
             Token::Assign,
             Token::Fn,
             Token::LParen,
-            Token::Ident("x"),
+            Token::Ident(String::from("x")),
             Token::Comma,
-            Token::Ident("y"),
+            Token::Ident(String::from("y")),
             Token::RParen,
             Token::LBrace,
-            Token::Ident("x"),
+            Token::Ident(String::from("x")),
             Token::Plus,
-            Token::Ident("y"),
+            Token::Ident(String::from("y")),
             Token::Semicolon,
             Token::RBrace,
             Token::Semicolon,
             Token::Let,
-            Token::Ident("result"),
+            Token::Ident(String::from("result")),
             Token::Assign,
-            Token::Ident("add"),
+            Token::Ident(String::from("add")),
             Token::LParen,
-            Token::Ident("five"),
+            Token::Ident(String::from("five")),
             Token::Comma,
-            Token::Ident("ten"),
+            Token::Ident(String::from("ten")),
             Token::RParen,
             Token::Semicolon,
             Token::If,
             Token::LParen,
-            Token::Int("5"),
+            Token::Int(String::from("5")),
             Token::GT,
-            Token::Int("10"),
+            Token::Int(String::from("10")),
             Token::RParen,
             Token::LBrace,
             Token::Return,
@@ -318,17 +325,17 @@ if (5 > 10) {
             Token::False,
             Token::Semicolon,
             Token::RBrace,
-            Token::Int("10"),
+            Token::Int(String::from("10")),
             Token::EQ,
-            Token::Int("10"),
+            Token::Int(String::from("10")),
             Token::Semicolon,
-            Token::Int("10"),
+            Token::Int(String::from("10")),
             Token::NotEQ,
-            Token::Int("9"),
+            Token::Int(String::from("9")),
             Token::Semicolon,
             Token::EOF,
         ];
-        let mut l = Lexer::new(input);
+        let mut l = Lexer::new(String::from(input));
         for t in expected {
             assert_eq!(t, l.next_token());
         }
@@ -353,7 +360,7 @@ if (5 > 10) {
             Token::LT,
             Token::GT,
         ];
-        let mut l = Lexer::new(input);
+        let mut l = Lexer::new(String::from(input));
         for t in expected {
             assert_eq!(t, l.next_token());
         }
@@ -367,13 +374,13 @@ let a_foo = 10;
 ";
         let expected = vec![
             Token::Let,
-            Token::Ident("a_foo"),
+            Token::Ident(String::from("a_foo")),
             Token::Assign,
-            Token::Int("10"),
+            Token::Int(String::from("10")),
             Token::Semicolon,
-            Token::Illegal("."),
+            Token::Illegal(String::from(".")),
         ];
-        let mut l = Lexer::new(input);
+        let mut l = Lexer::new(String::from(input));
         for t in expected {
             assert_eq!(t, l.next_token());
         }

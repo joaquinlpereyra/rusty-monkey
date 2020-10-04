@@ -5,18 +5,18 @@ use super::lexer::Token;
 use std::fmt;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Expression<'a> {
-    Literal(LiteralNode<'a>),
-    Integer(IntegerNode<'a>),
-    Prefix(PrefixNode<'a>),
-    Binary(BinaryNode<'a>),
-    Boolean(BooleanNode<'a>),
-    IfElse(IfElseNode<'a>),
-    Fn(FnNode<'a>),
-    FnCall(FnCallNode<'a>),
+pub enum Expression {
+    Literal(LiteralNode),
+    Integer(IntegerNode),
+    Prefix(PrefixNode),
+    Binary(BinaryNode),
+    Boolean(BooleanNode),
+    IfElse(IfElseNode),
+    Fn(FnNode),
+    FnCall(FnCallNode),
 }
 
-impl<'a> fmt::Display for Expression<'a> {
+impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self {
             Expression::Literal(n) => n.token.to_string(),
@@ -59,15 +59,15 @@ impl<'a> fmt::Display for Expression<'a> {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Statement<'a> {
-    Let(LetNode<'a>),
-    Return(ReturnNode<'a>),
-    Expression(ExpressionStatementNode<'a>),
-    Block(BlockNode<'a>),
-    ForLoop(ForLoopNode<'a>),
+pub enum Statement {
+    Let(LetNode),
+    Return(ReturnNode),
+    Expression(ExpressionStatementNode),
+    Block(BlockNode),
+    ForLoop(ForLoopNode),
 }
 
-impl<'a> fmt::Display for Statement<'a> {
+impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self {
             Statement::Let(n) => format!("LET {} = {}", n.name, n.value),
@@ -88,11 +88,11 @@ impl<'a> fmt::Display for Statement<'a> {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Program<'a> {
-    pub statements: Vec<Statement<'a>>,
+pub struct Program {
+    pub statements: Vec<Statement>,
 }
 
-impl<'a> fmt::Display for Program<'a> {
+impl fmt::Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -107,86 +107,86 @@ impl<'a> fmt::Display for Program<'a> {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct LiteralNode<'a> {
-    pub token: Token<'a>,
+pub struct LiteralNode {
+    pub token: Token,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct IntegerNode<'a> {
-    pub token: Token<'a>,
+pub struct IntegerNode {
+    pub token: Token,
     pub int: i64,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct LetNode<'a> {
-    pub token: Token<'a>,
+pub struct LetNode {
+    pub token: Token,
     pub name: String,
-    pub value: Expression<'a>,
+    pub value: Expression,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ReturnNode<'a> {
-    pub token: Token<'a>,
-    pub value: Expression<'a>,
+pub struct ReturnNode {
+    pub token: Token,
+    pub value: Expression,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ExpressionStatementNode<'a> {
-    pub token: Token<'a>,
-    pub expr: Expression<'a>,
+pub struct ExpressionStatementNode {
+    pub token: Token,
+    pub expr: Expression,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct PrefixNode<'a> {
-    pub op: Token<'a>,
-    pub expr: Box<Expression<'a>>,
+pub struct PrefixNode {
+    pub op: Token,
+    pub expr: Box<Expression>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct BinaryNode<'a> {
-    pub op: Token<'a>,
-    pub lhs: Box<Expression<'a>>,
-    pub rhs: Box<Expression<'a>>,
+pub struct BinaryNode {
+    pub op: Token,
+    pub lhs: Box<Expression>,
+    pub rhs: Box<Expression>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct BooleanNode<'a> {
-    pub token: Token<'a>,
+pub struct BooleanNode {
+    pub token: Token,
     pub value: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct IfElseNode<'a> {
-    pub token: Token<'a>,
-    pub condition: Box<Expression<'a>>,
-    pub then: Box<Statement<'a>>,
-    pub alternative: Option<Box<Statement<'a>>>,
+pub struct IfElseNode {
+    pub token: Token,
+    pub condition: Box<Expression>,
+    pub then: Box<Statement>,
+    pub alternative: Option<Box<Statement>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct BlockNode<'a> {
-    pub token: Token<'a>,
-    pub stmts: Vec<Statement<'a>>,
+pub struct BlockNode {
+    pub token: Token,
+    pub stmts: Vec<Statement>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct FnNode<'a> {
-    pub token: Token<'a>,
-    pub params: Vec<Expression<'a>>,
-    pub body: Box<Statement<'a>>,
+pub struct FnNode {
+    pub token: Token,
+    pub params: Vec<Expression>,
+    pub body: Box<Statement>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct FnCallNode<'a> {
-    pub token: Token<'a>,
-    pub fun: Box<Expression<'a>>,
-    pub args: Vec<Expression<'a>>,
+pub struct FnCallNode {
+    pub token: Token,
+    pub fun: Box<Expression>,
+    pub args: Vec<Expression>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ForLoopNode<'a> {
-    pub token: Token<'a>,
-    pub range: Expression<'a>,
+pub struct ForLoopNode {
+    pub token: Token,
+    pub range: Expression,
     pub ident: String,
-    pub body: Box<Statement<'a>>,
+    pub body: Box<Statement>,
 }
