@@ -5,10 +5,10 @@ The language is very simple, and it is is interpreted as you write. There's a RE
 
 We support simple arithmetics and assignments:
 
-- + operator
-- - operator
-- / operator
-- * operator
+- \+ operator
+- \- operator
+- \/ operator
+- \* operator
 
 Strings and arrays are not yet supported. 
 
