@@ -14,8 +14,7 @@ Strings and arrays are not yet supported.
 
 Integers are always represented as int64.
 
-Here is a simple example:
-
+Here is a simple example, where you can also see how to assign variables, how to use conditionals and for loops.
 ```
 let x = 4;
 let y = 10;
@@ -29,6 +28,8 @@ if (y == 20) {
 };
 z;
 ```
+
+
 
 The complete grammar looks like this:
 
