@@ -15,11 +15,63 @@ const FALSE: Object = Object::Boolean { value: false };
 // Most objects represent a single value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Object {
-    Boolean { value: bool },
-    Integer { value: i64 },
-    Return { value: Box<Object> },
-    Error { msg: String },
+    Boolean {
+        value: bool,
+    },
+    Integer {
+        value: i64,
+    },
+    Function {
+        params: Vec<ast::LiteralNode>,
+        body: ast::BlockNode,
+        env: Env,
+    },
+    Return {
+        value: Box<Object>,
+    },
+    Error {
+        msg: String,
+    },
     Null,
+}
+
+impl Object {
+    fn type_str(&self) -> &str {
+        match self {
+            Object::Boolean { .. } => "BOOLEAN",
+            Object::Integer { .. } => "INTEGER",
+            Object::Function { .. } => "FUNCTION",
+            Object::Return { .. } => "RETURN",
+            Object::Error { .. } => "ERR",
+            Object::Null => "NULL",
+        }
+    }
+}
+
+impl fmt::Display for Object {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match &self {
+            Object::Boolean { value } => format!("{}", value),
+            Object::Integer { value } => format!("{}", value),
+            Object::Function { params, body, .. } => format!(
+                "fn {} {{ {} }}",
+                params
+                    .iter()
+                    .map(|x| x.token.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                body.stmts
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
+            Object::Return { value } => format! {"return {}", value},
+            Object::Error { msg } => format!("{}", msg),
+            Object::Null => "null".to_string(),
+        };
+        write!(f, "{}", s)
+    }
 }
 
 fn err_type_mismatch(lhs: &Object, op: &Token, rhs: &Object) -> Object {
@@ -30,6 +82,18 @@ fn err_type_mismatch(lhs: &Object, op: &Token, rhs: &Object) -> Object {
             op,
             rhs.type_str()
         ),
+    }
+}
+
+fn err_unexpected_object(got: Object, expected: &str) -> Object {
+    Object::Error {
+        msg: format!("unexpected object. got {}, expected {}", got, expected,),
+    }
+}
+
+fn err_unexpected_ast_node(got: ast::Expression, expected: &str) -> Object {
+    Object::Error {
+        msg: format!("unexpected ast node. got {}, expected {}", got, expected,),
     }
 }
 
@@ -50,28 +114,42 @@ fn err_identifier_not_found(ident: &Token) -> Object {
     }
 }
 
-impl Object {
-    fn type_str(&self) -> &str {
-        match self {
-            Object::Boolean { value: _ } => "BOOLEAN",
-            Object::Integer { value: _ } => "INTEGER",
-            Object::Return { value: _ } => "RETURN",
-            Object::Error { msg: _ } => "ERR",
-            Object::Null => "NULL",
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Env {
+    outer: Option<Box<Env>>,
+    store: HashMap<String, Object>,
 }
 
-impl fmt::Display for Object {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s = match &self {
-            Object::Boolean { value } => format!("{}", value),
-            Object::Integer { value } => format!("{}", value),
-            Object::Return { value } => format! {"return {}", value},
-            Object::Error { msg } => format!("{}", msg),
-            Object::Null => "null".to_string(),
+impl Env {
+    pub fn new() -> Env {
+        Env {
+            outer: None,
+            store: HashMap::new(),
+        }
+    }
+
+    pub fn new_with_outer(outer: Box<Env>) -> Env {
+        Env {
+            outer: Some(outer),
+            store: HashMap::new(),
+        }
+    }
+
+    pub fn get(&self, ident: &Token) -> Option<Object> {
+        let name = match ident {
+            Token::Ident(s) => s,
+            _ => unreachable!("calling get on non ident token: {}", ident),
         };
-        write!(f, "{}", s)
+        match (&self.outer, self.store.get(name)) {
+            (_, Some(obj)) => Some(obj.clone()),
+            (Some(outer), _) => outer.get(ident),
+            (None, None) => None,
+        }
+    }
+
+    pub fn set(&mut self, ident: &str, obj: Object) {
+        let ident = ident.to_owned();
+        self.store.insert(ident, obj);
     }
 }
 
@@ -87,34 +165,16 @@ impl fmt::Display for Object {
 /// assert_eq!(result, Object::Integer{value: 5});
 /// ```
 pub struct Interpreter {
-    store: HashMap<String, Object>,
+    env: Env,
 }
 
 impl Interpreter {
     pub fn new() -> Interpreter {
-        Interpreter {
-            store: HashMap::new(),
-        }
+        Interpreter { env: Env::new() }
     }
 
-    pub fn new_with_store(store: HashMap<String, Object>) -> Interpreter {
-        Interpreter { store }
-    }
-
-    fn get_identifier(&mut self, ident: &Token) -> Option<Object> {
-        let name = match ident {
-            Token::Ident(s) => s,
-            _ => unreachable!("calling get_identifier on non ident token: {}", ident),
-        };
-        match self.store.get(name) {
-            Some(obj) => Some(obj.clone()),
-            None => None,
-        }
-    }
-
-    fn set_identifier(&mut self, ident: &str, obj: Object) {
-        let ident = ident.to_owned();
-        self.store.insert(ident, obj);
+    fn new_with_env(env: Env) -> Interpreter {
+        Interpreter { env }
     }
 
     // Evaluates a program, consuming the interpreter.
@@ -147,9 +207,8 @@ impl Interpreter {
             },
             ast::Statement::Let(node) => match self.eval_expr(&node.value) {
                 o @ Object::Error { .. } => o,
-                // o => Object::Return { value: Box::new(o) },
                 o => {
-                    self.set_identifier(&node.name, o);
+                    self.env.set(&node.name, o);
                     NULL
                 }
             },
@@ -157,14 +216,12 @@ impl Interpreter {
                 let range = self.eval_expr(&node.range);
                 if let Object::Integer { value } = range {
                     for _i in 0..value {
-                        self.set_identifier(&node.ident, Object::Integer { value: _i });
+                        self.env.set(&node.ident, Object::Integer { value: _i });
                         self.eval_stmt(&node.body);
                     }
                     NULL
                 } else {
-                    Object::Error {
-                        msg: "range is not an integer".to_owned(),
-                    }
+                    return err_unexpected_object(range, "integer");
                 }
             }
         }
@@ -193,11 +250,69 @@ impl Interpreter {
                     (lhs, rhs) => self.eval_binary_expr(lhs, &node.op, rhs),
                 }
             }
-            ast::Expression::Literal(node) => match self.get_identifier(&node.token) {
+            ast::Expression::Literal(node) => match self.env.get(&node.token) {
                 None => err_identifier_not_found(&node.token),
                 Some(obj) => obj,
             },
-            t => unimplemented!("{}", t.to_string()),
+            ast::Expression::Fn(node) => self.eval_fn(node),
+            ast::Expression::FnCall(node) => self.eval_fn_call(node),
+        }
+    }
+
+    fn eval_fn_call(&mut self, node: &ast::FnCallNode) -> Object {
+        let (params, body, env) = match &*node.fun {
+            ast::Expression::Literal(n) => match self.env.get(&n.token.clone()) {
+                Some(obj) => match obj {
+                    Object::Function { params, body, env } => (params, body, env),
+                    obj => return err_unexpected_object(obj, "function"),
+                },
+                None => return err_identifier_not_found(&n.token),
+            },
+            ast::Expression::Fn(n) => match self.eval_fn(&n) {
+                Object::Function { params, body, env } => (params, body, env),
+                o => return o,
+            },
+            _ => return err_unexpected_ast_node(*node.fun.clone(), "Literal or anonymous fn"),
+        };
+
+        let mut args = Vec::with_capacity(node.args.len());
+        for arg in &node.args {
+            let object = self.eval_expr(&arg);
+            if let Object::Error { .. } = object {
+                return object;
+            }
+            args.push(object);
+        }
+
+        let mut closure = Env::new_with_outer(Box::new(env));
+        for (param, arg) in params.iter().zip(args) {
+            closure.set(&param.token.to_string(), arg)
+        }
+        let mut i = Interpreter::new_with_env(closure);
+        i.eval_stmts(&body.stmts)
+    }
+
+    fn eval_fn(&self, node: &ast::FnNode) -> Object {
+        let mut params = Vec::with_capacity(node.params.len());
+        for param in &node.params {
+            if let ast::Expression::Literal(node) = param {
+                params.push(node.clone())
+            } else {
+                return err_unexpected_ast_node(param.clone(), "Literal");
+            }
+        }
+        let body = match &*node.body {
+            ast::Statement::Block(n) => n.clone(),
+            _ => {
+                return Object::Error {
+                    msg: "function body is not a block statement".to_owned(),
+                }
+            }
+        };
+        Object::Function {
+            params,
+            body,
+            env: self.env.clone(),
         }
     }
 
@@ -411,6 +526,24 @@ mod tests {
             Case::new("let a = 5 * 5; a", 25),
             Case::new("let a = 5; let b = 10; b*a;", 50),
             Case::new("let a = 5; let b = 10; let c = a * b + 10; c", 60),
+        ];
+        for case in cases {
+            let object = quick_eval(&case);
+            match object {
+                Object::Integer { value } => assert_eq!(value, case.expected),
+                _ => panic!(
+                    "did not got error, instead: {} on case {}",
+                    object, case.input
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn test_functions() {
+        let cases = vec![
+            // Case::new("let foo = fn(a) { return a }, foo(5)", 5),
+            Case::new("fn() { return 10 }()", 10),
         ];
         for case in cases {
             let object = quick_eval(&case);

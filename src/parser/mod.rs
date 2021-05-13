@@ -124,7 +124,7 @@ impl Parser {
             self.next_token();
             Ok(())
         } else {
-            Err(ParserError::new(&expected, &self.peek_token))
+            Err(ParserError::new(&expected, &self.current_token))
         }
     }
 
@@ -313,6 +313,7 @@ impl Parser {
     // let foo  = fn (x,y) { x + y; }
     //            ^                 $
     fn parse_fn(&mut self) -> Result<ast::Expression> {
+        dbg!("parsing function");
         self.checked_skip(Token::Fn)?;
         self.checked_skip(Token::LParen)?;
         let params = self.parse_fn_args()?;
@@ -330,6 +331,8 @@ impl Parser {
             ));
         }
 
+        dbg!("parsing block stmts");
+        dbg!(self.current_token.clone());
         let body = Box::new(self.parse_block_stmt()?);
         self.skip_if(Token::RBrace);
         self.skip_if(Token::Semicolon);
@@ -349,6 +352,7 @@ impl Parser {
         let mut args = Vec::new();
         // no arguments for this function
         if let Token::RParen = self.current_token {
+            self.checked_skip(Token::RParen)?;
             return Ok(args);
         }
         // surely there is at least one argument...
