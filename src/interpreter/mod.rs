@@ -259,6 +259,7 @@ impl Interpreter {
         }
     }
 
+    // Evaluates the function to an object
     fn eval_fn_call(&mut self, node: &ast::FnCallNode) -> Object {
         let (params, body, env) = match &*node.fun {
             ast::Expression::Literal(n) => match self.env.get(&n.token.clone()) {

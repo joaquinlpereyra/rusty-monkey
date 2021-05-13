@@ -239,7 +239,7 @@ impl Parser {
         Ok(expr)
     }
 
-    // Parses a call to a function. Will start at function name and finish at last parenthesis.
+    // Parses a call to a function. Will start at function name and finish at last parenthesis!
     // let x = add(2 + 3);
     //         ^          $
     fn parse_fn_call(&mut self, fun: Box<ast::Expression>) -> Result<ast::Expression> {

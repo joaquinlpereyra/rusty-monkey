@@ -43,8 +43,8 @@ pub enum Token {
     RBrace,
 
     // Keywords
-    Fn,
     Let,
+    Fn,
     True,
     False,
     If,
