@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Token","Describes all the tokens for Monkey"]],"struct":[["Lexer","The lexer is the workhouse of this module. It's designed to parse a Monkey string into tokens."]]});
