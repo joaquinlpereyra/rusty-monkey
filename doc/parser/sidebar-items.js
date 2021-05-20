@@ -1,0 +1,1 @@
+initSidebarItems({"mod":[["ast","The AST module defines all the nodes and a convenience enum to pattern match when you are expecting a node."]],"struct":[["Parser","The parser is responsible from translating from a series of tokens to actual ASTs nodes."],["ParserError",""]]});
