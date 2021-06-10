@@ -45,3 +45,21 @@ IFELSE  ::= if (<EXPR>) { <BLOCK> } | if (<EXPR>) { <BLOCK> } else S
 BINARY  ::= <EXPR> + <EXPR> | <EXPR> - <EXPR> | <EXPR> * <EXPR> | <EXPR> / <EXPR>
 FOR     ::= for <LITERAL> in <INT> { <BLOCK> }
 ```
+
+# Install
+
+How to install monkey;
+
+Install node.js, download the installer from https://nodejs.org/en/download/ and follow its installation steps.
+
+Run command in terminal over root folder.
+```
+npm install rust
+```
+
+How to run monkey;
+
+run command in terminal over root folder
+```
+cargo run
+```
