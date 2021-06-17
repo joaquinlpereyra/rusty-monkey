@@ -57,10 +57,22 @@ $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 # Clone this repository
 $ git clone https://github.com/joaquinlpereyra/rusty-monkey
 
-# Go into the new directory and run the project
-$ cargo run
+# Get into the new directory
+$ cd rusty-monkey
 
 # You can run the tests with
 $ cargo test
+
+# You can run the REPL with
+$ cargo run
+🙈 🙊 🙉 let x = 4;
+tokens: [Let, Ident("x"), Assign, Int("4"), Semicolon]
+parsed: LET x = 4
+interpreted: null
+🙈 🙊 🙉 x
+tokens: [Ident("x")]
+parsed: (x)
+interpreted: 4
+🙈 🙊 🙉
 ```
 
