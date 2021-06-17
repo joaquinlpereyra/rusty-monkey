@@ -63,6 +63,10 @@ $ cd rusty-monkey
 # You can run the tests with
 $ cargo test
 
+# You can see the docs with
+$ cargo doc
+$ xdg-open target/doc/monkey/index.html
+
 # You can run the REPL with
 $ cargo run
 🙈 🙊 🙉 let x = 4;
