@@ -48,18 +48,19 @@ FOR     ::= for <LITERAL> in <INT> { <BLOCK> }
 
 # Install
 
-How to install monkey;
-
-Install node.js, download the installer from https://nodejs.org/en/download/ and follow its installation steps.
-
-Run command in terminal over root folder.
 ```
-npm install rust
+# First install rust. This only works for Unix systems
+# See https://forge.rust-lang.org/infra/other-installation-methods.html
+# for Windows
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Clone this repository
+$ git clone https://github.com/joaquinlpereyra/rusty-monkey
+
+# Go into the new directory and run the project
+$ cargo run
+
+# You can run the tests with
+$ cargo test
 ```
 
-How to run monkey;
-
-run command in terminal over root folder
-```
-cargo run
-```
